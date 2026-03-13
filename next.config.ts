@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    "/api/generate-report": ["./lib/template.docx"],
+  },
 };
 
 export default nextConfig;

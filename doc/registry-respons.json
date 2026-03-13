@@ -1,0 +1,136 @@
+[
+    {
+        "_id": "986019062625.dkr.ecr.us-east-1.amazonaws.com/ccdi-federation-dcc:1.2.0.10",
+        "type": "registry",
+        "hostname": "nciws-p2664-c.nci.nih.gov",
+        "scanTime": "2026-03-12T20:14:54.675Z",
+        "binaries": null,
+        "Secrets": null,
+        "startupBinaries": null,
+        "osDistro": "debian",
+        "osDistroVersion": "",
+        "osDistroRelease": "trixie",
+        "distro": "Debian GNU/Linux 13 (trixie)",
+        "packages": null,
+        "files": null,
+        "packageManager": false,
+        "isARM64": false,
+        "redHatNonRPMImage": false,
+        "foundSecrets": null,
+        "secretScanMetrics": {},
+        "image": {
+            "entrypoint": [
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000"
+            ],
+            "created": "2026-02-25T15:23:52.93Z"
+        },
+        "history": null,
+        "id": "sha256:81ebe4fc3f62a224c44bca0b2117e92dc33e0a5167859152f87323dbd1dc529c",
+        "complianceIssues": null,
+        "allCompliance": {},
+        "vulnerabilities": null,
+        "repoTag": {
+            "registry": "986019062625.dkr.ecr.us-east-1.amazonaws.com",
+            "repo": "ccdi-federation-dcc",
+            "tag": "1.2.0.10"
+        },
+        "tags": [
+            {
+                "registry": "986019062625.dkr.ecr.us-east-1.amazonaws.com",
+                "repo": "ccdi-federation-dcc",
+                "tag": "1.2.0.10"
+            }
+        ],
+        "repoDigests": [
+            "986019062625.dkr.ecr.us-east-1.amazonaws.com/ccdi-federation-dcc@sha256:1968e3d1ef1e399a3ba530e3dc41011e3435621d4dae6541f9290fa67beed8b0"
+        ],
+        "creationTime": "2026-02-25T15:23:52.93Z",
+        "pushTime": "2026-02-25T15:24:14.896Z",
+        "vulnerabilitiesCount": 19,
+        "complianceIssuesCount": 0,
+        "vulnerabilityDistribution": {
+            "critical": 0,
+            "high": 2,
+            "medium": 0,
+            "low": 17,
+            "total": 19
+        },
+        "complianceDistribution": {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "total": 0
+        },
+        "vulnerabilityRiskScore": 20017,
+        "complianceRiskScore": 0,
+        "topLayer": "sha256:8c20d48ff45c7cbd02eff723f0ad9a1c6510fa7343e6c0ad80ce0d58884e550d",
+        "riskFactors": {
+            "Attack complexity: low": {},
+            "Attack vector: network": {},
+            "DoS - High": {},
+            "DoS - Low": {},
+            "Exploit exists - POC": {},
+            "Has fix": {},
+            "High severity": {},
+            "Recent vulnerability": {}
+        },
+        "labels": [
+            "org.opencontainers.image.description:REST API for querying CCDI graph database",
+            "org.opencontainers.image.source:https://github.com/CBIIT/ccdi-dcc-federation-service",
+            "org.opencontainers.image.title:CCDI DCC Federation Service",
+            "org.opencontainers.image.version:0.1.0"
+        ],
+        "installedProducts": {
+            "docker": "25.0.4",
+            "osDistro": "Debian GNU/Linux 13 (trixie)",
+            "hasPackageManager": true
+        },
+        "scanVersion": "34.03.138",
+        "scanBuildDate": "20251121",
+        "firstScanTime": "2026-02-25T17:10:27.02Z",
+        "cloudMetadata": {
+            "provider": "aws",
+            "region": "us-east-1",
+            "accountID": "986019062625"
+        },
+        "registryType": "aws",
+        "instances": [
+            {
+                "image": "986019062625.dkr.ecr.us-east-1.amazonaws.com/ccdi-federation-dcc:1.2.0.10",
+                "host": "nciws-p2664-c.nci.nih.gov",
+                "modified": "2026-02-25T17:10:03.242Z",
+                "tag": "1.2.0.10",
+                "repo": "ccdi-federation-dcc",
+                "registry": "986019062625.dkr.ecr.us-east-1.amazonaws.com"
+            }
+        ],
+        "hosts": {},
+        "err": "",
+        "collections": [
+            "All",
+            "Resources collection 1",
+            "CRDC CCDI All Collection"
+        ],
+        "scanID": 30068,
+        "trustStatus": "",
+        "firewallProtection": {
+            "enabled": false,
+            "supported": false,
+            "outOfBandMode": ""
+        },
+        "appEmbedded": false,
+        "caasSpecReferencesTotal": 0,
+        "caasSpecReferencesLaunchTypes": [],
+        "caasSpecReferencesServiceTypes": [],
+        "wildFireUsage": null,
+        "agentless": false,
+        "csaWindows": false,
+        "malwareAnalyzedTime": "0001-01-01T00:00:00Z"
+    }
+]
