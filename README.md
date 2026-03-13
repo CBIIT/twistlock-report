@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Twistlock Report App
 
-## Getting Started
+Next.js application that generates Twistlock security reports.
 
-First, run the development server:
+## Prerequisites
+
+- Docker Desktop (or Docker Engine)
+- GNU Make (usually preinstalled on macOS)
+
+## Run With Docker (Simple)
+
+From the project root, run:
+
+1. Build the image from `Dockerfile`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker build -t twistlock-report-app:latest .
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Run the image as a container:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker run --name twistlock-report-app --rm -d -p 3000:3000 twistlock-report-app:latest
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Open the app:
 
-## Learn More
+```text
+http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+4. Check logs (optional):
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker logs -f twistlock-report-app
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Stop the container:
 
-## Deploy on Vercel
+```bash
+docker stop twistlock-report-app
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Container Environment Variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The image runs with:
+
+- `NODE_ENV=production`
+- `PORT=3000`
+- `HOSTNAME=0.0.0.0`
+
+If you need custom environment variables from your local `.env` file, run Docker directly:
+
+```bash
+docker run --name twistlock-report-app --rm -d -p 3000:3000 --env-file .env twistlock-report-app:latest
+```
+
+## Useful Make Targets
+
+```bash
+make help
+make docker-build
+make docker-run
+make docker-stop
+make docker-rm
+make docker-logs
+make docker-shell
+```
+
+## Local Development (Without Docker)
+
+Install dependencies and run dev server:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Then open `http://localhost:3000`.
