@@ -24,6 +24,20 @@ export interface ReportInput {
 	scanResult: TwistlockScanResult;
 }
 
+export interface ImageScanEntry {
+	imageName: string;
+	imageTag: string;
+	registry: string;
+	scanResult: TwistlockScanResult;
+}
+
+export interface CombinedReportInput {
+	projectName?: string;
+	tpm?: string;
+	reportDate: Date;
+	entries: ImageScanEntry[];
+}
+
 const TEMPLATE_PLACEHOLDER_KEYS = [
 	"projectName",
 	"tpm",
@@ -96,6 +110,20 @@ function mapVulnerability(v: Vulnerability, imageName: string) {
 	};
 }
 
+function injectMicroservicesLoop(zip: PizZip): void {
+	const docXmlFile = zip.file("word/document.xml");
+	if (!docXmlFile) return;
+
+	let xml = docXmlFile.asText();
+
+	// After normalization, placeholders are clean {microserviceName} and {imageTag}.
+	// Wrap them with loop markers so docxtemplater repeats the table row per entry.
+	xml = xml.replace("{microserviceName}", "{#microservices}{microserviceName}");
+	xml = xml.replace("{imageTag}", "{imageTag}{/microservices}");
+
+	zip.file("word/document.xml", xml);
+}
+
 export async function buildReport(data: ReportInput): Promise<Buffer> {
 	const templatePath = path.join(process.cwd(), "lib", "template.docx");
 	const templateContent = fs.readFileSync(templatePath, "binary");
@@ -146,6 +174,75 @@ export async function buildReport(data: ReportInput): Promise<Buffer> {
 		scanDate: formatDateLong(new Date(data.scanResult.scanTime)),
 		distro: data.scanResult.distro,
 		totalVulnerabilities: data.scanResult.vulnerabilitiesCount,
+		vulnerabilities: vulnerabilitiesForTemplate,
+	});
+
+	return doc.getZip().generate({ type: "nodebuffer" });
+}
+
+export async function buildCombinedReport(data: CombinedReportInput): Promise<Buffer> {
+	const templatePath = path.join(process.cwd(), "lib", "template.docx");
+	const templateContent = fs.readFileSync(templatePath, "binary");
+
+	const zip = new PizZip(templateContent);
+	normalizeBrokenTemplatePlaceholders(zip);
+	injectMicroservicesLoop(zip);
+	const doc = new Docxtemplater(zip, {
+		paragraphLoop: true,
+		linebreaks: true,
+		nullGetter() {
+			return "";
+		},
+	});
+
+	// Merge vulnerabilities from all entries, grouped by image
+	const allVulnerabilities: ReturnType<typeof mapVulnerability>[] = [];
+	let totalVulnerabilities = 0;
+
+	for (const entry of data.entries) {
+		totalVulnerabilities += entry.scanResult.vulnerabilitiesCount;
+		const sorted = [...(entry.scanResult.vulnerabilities ?? [])].sort(
+			(a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99)
+		);
+		for (const v of sorted) {
+			allVulnerabilities.push(mapVulnerability(v, entry.imageName));
+		}
+	}
+
+	const vulnerabilitiesForTemplate =
+		allVulnerabilities.length > 0
+			? allVulnerabilities
+			: [
+					{
+						imageName: data.entries[0]?.imageName ?? "",
+						cve: "No vulnerabilities found",
+						severity: "",
+						cvss: "",
+						packageName: "",
+						packageVersion: "",
+						fixStatus: "",
+						dateIdentified: "",
+						description: "",
+						jiraTicket: "",
+					},
+			  ];
+
+	// Use the first entry for header-level fields; each entry becomes a row via {#microservices} loop
+	const first = data.entries[0];
+	const microservices = data.entries.map((e) => ({
+		microserviceName: e.imageName,
+		imageTag: e.imageTag,
+	}));
+
+	doc.render({
+		projectName: data.projectName ?? "",
+		tpm: data.tpm ?? "",
+		reportDate: formatDateLong(data.reportDate),
+		microservices,
+		registry: first?.registry ?? "",
+		scanDate: first ? formatDateLong(new Date(first.scanResult.scanTime)) : "",
+		distro: first?.scanResult.distro ?? "",
+		totalVulnerabilities,
 		vulnerabilities: vulnerabilitiesForTemplate,
 	});
 

@@ -6,6 +6,18 @@ export interface RepoTag {
 
 export interface RegistrySearchItem {
 	repoTag: RepoTag;
+	scanTime: string;
+	creationTime: string;
+}
+
+export interface TagInfo {
+	tag: string;
+	creationTime: string;
+}
+
+export interface ProjectSearchResult {
+	repo: string;
+	tags: TagInfo[];
 }
 
 export interface Vulnerability {

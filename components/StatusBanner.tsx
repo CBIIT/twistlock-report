@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type StatusBannerProps = {
-	type: "success" | "error";
+	type: "success" | "error" | "info";
 	message: string;
 	onDismiss?: () => void;
 };
@@ -23,7 +23,9 @@ export default function StatusBanner({ type, message, onDismiss }: StatusBannerP
 	const styles =
 		type === "success"
 			? "border-green-200 bg-green-50 text-green-900"
-			: "border-red-200 bg-red-50 text-red-900";
+			: type === "info"
+				? "border-blue-200 bg-blue-50 text-blue-900"
+				: "border-red-200 bg-red-50 text-red-900";
 
 	return (
 		<Alert className={styles}>

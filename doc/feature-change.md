@@ -45,7 +45,7 @@ Phase 1: Search                    Phase 2: Select & Generate
 | Behavior | Default |
 |---|---|
 | Repository checkbox | **All checked** |
-| Tag dropdown | **Most recent tag** (by `scanTime`) pre-selected |
+| Tag dropdown | **Most recent tag** (by `creationTime`) pre-selected |
 | Select All toggle | Checks/unchecks all repositories at once |
 | Generate button | Shows count of selected repositories |
 
@@ -53,12 +53,12 @@ Phase 1: Search                    Phase 2: Select & Generate
 
 1. User enters **Project Name**, optional **TPM**, and **Twistlock Token**
 2. Clicks **"Search Repositories"**
-3. System queries Twistlock API, groups results by repository, returns top 3 tags per repo
+3. System queries Twistlock API, groups results by repository, returns top 5 tags per repo (sorted by image created time)
 4. UI displays a checklist table — all repos checked, most recent tag selected
 5. User optionally unchecks repos or changes tags
-6. Clicks **"Generate Reports (N)"**
-7. System generates one `.docx` per selected repo+tag, triggering sequential downloads
-8. Success banner shows summary: "Generated 3 reports successfully"
+7. Clicks **"Generate Report (N)"**
+8. System fetches scan data for all selected repo+tags and builds one combined `.docx`, triggering a single download
+9. Success banner shows summary: "Report generated with 3 repositories"
 
 ---
 
@@ -85,15 +85,15 @@ Phase 1: Search                    Phase 2: Select & Generate
     {
       "repo": "ccdi-federation-dcc",
       "tags": [
-        { "tag": "1.2.0.10", "scanTime": "2026-03-12T20:14:54.675Z" },
-        { "tag": "1.2.0.9",  "scanTime": "2026-03-10T14:22:11.000Z" },
-        { "tag": "1.2.0.8",  "scanTime": "2026-03-05T09:30:00.000Z" }
+        { "tag": "1.2.0.10", "creationTime": "2026-02-25T15:23:52.93Z" },
+        { "tag": "1.2.0.9",  "creationTime": "2026-02-20T10:15:00.000Z" },
+        { "tag": "1.2.0.8",  "creationTime": "2026-02-15T09:30:00.000Z" }
       ]
     },
     {
       "repo": "ccdi-hub-backend",
       "tags": [
-        { "tag": "2.1.0", "scanTime": "2026-03-11T18:00:00.000Z" }
+        { "tag": "2.1.0", "creationTime": "2026-02-22T18:00:00.000Z" }
       ]
     }
   ]
@@ -122,12 +122,31 @@ export async function searchByProject(
 
 - Calls `GET /api/v1/registry` with `search={projectName}` (broad search)
 - Groups response items by `repoTag.repo`
-- De-duplicates tags per repo, sorts by `scanTime` descending
-- Returns top 3 tags per repository
+- De-duplicates tags per repo, sorts by `creationTime` (image created time) descending
+- Returns top 5 tags per repository
 
-### 3.3 Existing Route: `POST /api/generate-report`
+### 3.3 Updated Route: `POST /api/generate-report`
 
-**No changes.** The existing endpoint continues to accept a single `imageName` + `imageTag` and return one `.docx`. The frontend calls it once per selected repository.
+**File:** `app/api/generate-report/route.ts`
+
+The endpoint is updated to accept **batch input** — an array of selected repositories — and return a **single combined `.docx`** containing all scan reports.
+
+**Request:**
+
+```json
+{
+  "projectName": "C3DC",
+  "tpm": "J. Doe",
+  "selections": [
+    { "imageName": "ccdi-federation-dcc", "imageTag": "1.2.0.10" },
+    { "imageName": "ccdi-hub-backend",    "imageTag": "2.1.0" },
+    { "imageName": "ccdi-hub-frontend",   "imageTag": "3.0.1" }
+  ],
+  "twistlockToken": "eyJ..."
+}
+```
+
+**Response:** A single `.docx` file combining the scan report sections for every selected repo+tag. Each repo's vulnerabilities appear under their own heading within the document.
 
 ---
 
@@ -140,7 +159,7 @@ export async function searchByProject(
 ```typescript
 export interface TagInfo {
   tag: string;
-  scanTime: string;
+  creationTime: string;
 }
 
 export interface ProjectSearchResult {
@@ -149,7 +168,7 @@ export interface ProjectSearchResult {
 }
 ```
 
-**File:** Add `RegistrySearchItem.scanTime` field (already in API response but not typed).
+**File:** Add `RegistrySearchItem.scanTime` and `RegistrySearchItem.creationTime` fields (already in API response but not typed).
 
 ### 4.2 New Validator: `searchFormSchema`
 
@@ -185,12 +204,12 @@ const [repos, setRepos] = useState<RepoSelection[]>([]);
 
 **Phase 2:** Renders a checklist table with:
 - Checkbox per repository row
-- Tag dropdown per row (populated with 2–3 most recent tags)
+- Tag dropdown per row (populated with up to 5 most recent tags)
 - "Select All" / "Deselect All" toggle
 - "Generate Reports (N)" button with count of checked repos
 - "← Back to Search" link to return to Phase 1
 
-**Generation:** Iterates over checked repos, calls `/api/generate-report` sequentially for each, collects results, shows summary banner.
+**Generation:** Sends all checked repos+tags in a single `POST /api/generate-report` request. The server resolves each image, fetches scan results, and builds one combined `.docx`. The client downloads the single file and shows a summary banner.
 
 ---
 
@@ -206,7 +225,7 @@ POST /api/search-images
 Server: GET Twistlock /api/v1/registry?search={projectName}
       │
       ▼
-Server: Group by repo, sort tags by scanTime desc, return top 3
+Server: Group by repo, sort tags by creationTime desc, return top 5
       │
       ▼
 Client: Display repo checklist (all checked, most recent tag selected)
@@ -215,17 +234,22 @@ Client: Display repo checklist (all checked, most recent tag selected)
 User selects/deselects repos, changes tags
       │
       ▼
-Click "Generate Reports"
+Click "Generate Report"
       │
       ▼
-For each selected repo+tag:
-  POST /api/generate-report  (existing endpoint, unchanged)
+POST /api/generate-report  (batch: all selected repo+tags)
       │
       ▼
-Download each .docx sequentially
+Server: For each selection → resolve registry → fetch scan result
       │
       ▼
-Show summary banner: "Generated N reports successfully"
+Server: Build single combined .docx with all repo sections
+      │
+      ▼
+Client: Download one .docx file
+      │
+      ▼
+Show summary banner: "Report generated with N repositories"
 ```
 
 ---
@@ -234,12 +258,13 @@ Show summary banner: "Generated N reports successfully"
 
 | File | Action | Description |
 |---|---|---|
-| `types/twistlock.ts` | **Modify** | Add `scanTime` to `RegistrySearchItem`; add `TagInfo`, `ProjectSearchResult` types |
+| `types/twistlock.ts` | **Modify** | Add `scanTime`, `creationTime` to `RegistrySearchItem`; add `TagInfo`, `ProjectSearchResult` types |
 | `lib/twistlock.ts` | **Modify** | Add `searchByProject()` function |
 | `lib/validators.ts` | **Modify** | Add `searchFormSchema` |
 | `app/api/search-images/route.ts` | **New** | Search endpoint returning grouped repos + tags |
 | `components/ReportForm.tsx` | **Modify** | Two-phase UI: search → checklist → batch generate |
-| `app/api/generate-report/route.ts` | **No change** | Called once per selected repo |
+| `lib/report-builder.ts` | **Modify** | Support building a combined report from multiple scan results |
+| `app/api/generate-report/route.ts` | **Modify** | Accept batch selections array, return single combined `.docx` |
 | `app/page.tsx` | **No change** | Still renders `<ReportForm />` |
 
 ---
@@ -249,13 +274,12 @@ Show summary banner: "Generated N reports successfully"
 - The Twistlock token is used identically to v1 — sent in the POST body over HTTPS, used only server-side, never logged
 - The search endpoint does not expose any additional data beyond what the user's token already grants access to
 - Project name search is URL-encoded before being sent to the Twistlock API (no injection risk)
-- Sequential report generation prevents server overload from parallel requests
+- Batch report generation is processed server-side in a single request, preventing server overload
 
 ---
 
 ## 8. Future Enhancements
 
-- **Zip download:** Bundle all generated reports into a single `.zip` file for one-click download
 - **Project name autocomplete:** Cache known project prefixes for faster search
 - **Saved project configurations:** Remember project-to-repo mappings for repeat users
 - **Parallel generation:** Generate reports concurrently (with rate limiting) for faster batch processing
