@@ -109,6 +109,7 @@ docker run --name twistlock-report-app --rm -d -p 3000:3000 --env-file .env twis
 
 
 
+
 ## Local Development (Without Docker)
 
 Install dependencies and run dev server:
