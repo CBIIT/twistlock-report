@@ -23,7 +23,13 @@ type RepoSelection = {
 	checked: boolean;
 };
 
-export default function ReportForm() {
+interface ReportFormProps {
+	token: string;
+	onSessionExpired: () => void;
+	onLogout: () => void;
+}
+
+export default function ReportForm({ token, onSessionExpired, onLogout }: ReportFormProps) {
 	const [phase, setPhase] = useState<"search" | "select">("search");
 	const [repos, setRepos] = useState<RepoSelection[]>([]);
 	const [isSearching, setIsSearching] = useState(false);
@@ -35,7 +41,6 @@ export default function ReportForm() {
 		defaultValues: {
 			projectName: "",
 			tpm: "",
-			twistlockToken: "",
 		},
 	});
 
@@ -52,9 +57,14 @@ export default function ReportForm() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					projectName: values.projectName,
-					twistlockToken: values.twistlockToken,
+					twistlockToken: token,
 				}),
 			});
+
+			if (response.status === 401) {
+				onSessionExpired();
+				return;
+			}
 
 			if (!response.ok) {
 				let message = "An unexpected error occurred.";
@@ -131,9 +141,14 @@ export default function ReportForm() {
 						imageName: s.repo,
 						imageTag: s.selectedTag,
 					})),
-					twistlockToken: formValues.twistlockToken,
+					twistlockToken: token,
 				}),
 			});
+
+			if (response.status === 401) {
+				onSessionExpired();
+				return;
+			}
 
 			if (!response.ok) {
 				let message = "An unexpected error occurred.";
@@ -171,6 +186,16 @@ export default function ReportForm() {
 
 	return (
 		<div className="space-y-4">
+			<div className="flex justify-end">
+				<button
+					type="button"
+					className="text-xs text-gray-400 hover:text-gray-700"
+					onClick={onLogout}
+				>
+					Log out
+				</button>
+			</div>
+
 			{status ? (
 				<StatusBanner
 					type={status.type}
@@ -204,7 +229,7 @@ export default function ReportForm() {
 									</FormItem>
 								)}
 							/>
-							<FormField
+							{/* <FormField
 								control={form.control}
 								name="tpm"
 								render={({ field }) => (
@@ -220,25 +245,7 @@ export default function ReportForm() {
 										<FormMessage />
 									</FormItem>
 								)}
-							/>
-							<FormField
-								control={form.control}
-								name="twistlockToken"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>Twistlock Token</FormLabel>
-										<FormControl>
-											<Input
-												type="password"
-												placeholder="Paste your Twistlock Bearer token"
-												disabled={isSearching}
-												{...field}
-											/>
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
+							/> */}
 
 							<Button type="submit" className="w-full" disabled={isSearching}>
 								{isSearching ? "Searching…" : "Search Repositories"}

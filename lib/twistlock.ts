@@ -26,6 +26,33 @@ export class TwistlockError extends Error {
 	}
 }
 
+export async function authenticate(
+	username: string,
+	password: string
+): Promise<string> {
+	const url = `${getBaseUrl()}/api/v1/authenticate`;
+
+	const res = await fetch(url, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ username, password }),
+	});
+
+	if (res.status === 401) {
+		throw new TwistlockError(401, "Invalid username or password.");
+	}
+	if (!res.ok) {
+		throw new TwistlockError(res.status, `Authentication failed: HTTP ${res.status}`);
+	}
+
+	const data = (await res.json()) as { token?: string };
+	if (!data.token) {
+		throw new TwistlockError(500, "Authentication succeeded but no token was returned.");
+	}
+
+	return data.token;
+}
+
 export async function resolveRegistry(
 	imageName: string,
 	imageTag: string,

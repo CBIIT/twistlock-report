@@ -28,7 +28,13 @@ export type BatchReportFormValues = z.infer<typeof batchReportFormSchema>;
 export const searchFormSchema = z.object({
 	projectName: z.string().min(1, "Project name is required"),
 	tpm: z.string().optional(),
-	twistlockToken: z.string().min(1, "Twistlock token is required"),
 });
 
 export type SearchFormValues = z.infer<typeof searchFormSchema>;
+
+export const loginFormSchema = z.object({
+	username: z.string().min(1, "Username is required"),
+	password: z.string().min(1, "Password is required"),
+});
+
+export type LoginFormValues = z.infer<typeof loginFormSchema>;

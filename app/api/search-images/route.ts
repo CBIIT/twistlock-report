@@ -1,10 +1,15 @@
 import { TwistlockError, searchByProject } from "@/lib/twistlock";
-import { searchFormSchema } from "@/lib/validators";
+import { z } from "zod";
+
+const searchImagesSchema = z.object({
+	projectName: z.string().min(1, "Project name is required"),
+	twistlockToken: z.string().min(1, "Twistlock token is required"),
+});
 
 export async function POST(request: Request): Promise<Response> {
 	try {
 		const body = await request.json();
-		const parsed = searchFormSchema.safeParse(body);
+		const parsed = searchImagesSchema.safeParse(body);
 
 		if (!parsed.success) {
 			return Response.json({ error: "Invalid input. Please check all fields." }, { status: 400 });
