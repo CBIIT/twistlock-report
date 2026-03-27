@@ -80,7 +80,7 @@ jobs:
           REGISTRY_URL: ${{ secrets.AWS_ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
           FE_IMAGE_NAME: ${{ secrets.AWS_ECR_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_FE }}:${{ env.IMAGE_TAG }}
         run: |
-          docker build --no-cache -t $FE_IMAGE_NAME -f frontend/Dockerfile .
+          docker build --no-cache -t $FE_IMAGE_NAME -f Dockerfile .
 
       - name: Run Trivy test scan for FE Docker Image
         id: trivy-scan-fe
