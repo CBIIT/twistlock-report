@@ -9,7 +9,7 @@ from datetime import date
 from aws_cdk import Duration
 
 class frontendService:
-  def createService(self, config,security_group):
+  def createService(self, config):
     
     ### Frontend Service ###############################################################################################################
     service = "frontend"
@@ -54,8 +54,8 @@ class frontendService:
         memory_limit_mib=config.getint(service, 'memory'),
         port_mappings=[ecs.PortMapping(container_port=config.getint(service, 'port'), name=service)],
         command=command,
-        environment=environment,
-        secrets=secrets,
+        #environment=environment,
+        #secrets=secrets,
         logging=ecs.LogDrivers.aws_logs(
             stream_prefix="{}-{}".format(self.namingPrefix, service)
         )
@@ -212,7 +212,6 @@ class frontendService:
         ),
         #vpc_subnets=subnets_fe,
         vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-        security_groups=security_group
     )
 
     ecsTarget = self.listener.add_targets("ECS-{}-Target".format(service),

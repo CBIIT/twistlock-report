@@ -21,7 +21,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_efs as efs
 from aws_cdk import Duration
 from aws_cdk import RemovalPolicy
-from services import memgraph, frontend, backend, interoperation
+from services import frontend
 import aws_cdk as cdk
 
 class Stack(Stack):
@@ -62,7 +62,6 @@ class Stack(Stack):
             internet_facing=config.getboolean('alb', 'internet_facing'),
             #vpc_subnets=selected_subnets,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
-            security_group=alb_security_group
         )
 
         self.ALB.add_redirect(
