@@ -46,3 +46,6 @@ next-env.d.ts
 # temp scripts & test artefacts (Phase 2/3 smoke tests)
 tmp-*.ts
 test-output.docx
+
+# generated batch reports
+/reports/

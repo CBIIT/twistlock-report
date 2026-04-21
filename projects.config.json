@@ -1,0 +1,12 @@
+[
+  {
+    "project": "icdc",
+    "tpm": "Gina Kuffel",
+    "components": [
+      { "image": "crdc-icdc-backend",        "tag": "prod-14.13.0.221" },
+      { "image": "crdc-icdc-files",          "tag": "prod-2.3.2.90" },
+      { "image": "crdc-icdc-frontend",       "tag": "4.3.0.527" },
+      { "image": "crdc-icdc-interoperation", "tag": "prod-1.1.0.3" }
+    ]
+  }
+]
