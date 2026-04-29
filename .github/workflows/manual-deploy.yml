@@ -1,4 +1,4 @@
-name: General Commons (CDS)  Manual Deployment
+name: Deploy twistlock scan report app
 permissions: 
   contents: write
   id-token: write
@@ -6,22 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Dev environment'
+        description: 'Twistlock scan report environment'
         required: true
         default: dev
         type: choice
         options:
           - dev
-          - dev2
-      #crdc_hub_branch:
-        #description: 'Which Branch of the crdc-datahub code to use'
-        #required: true
-        #default: 'main'
-        #type: text
-      frontend_image:
-      backend_image:
-      interoperation_image:
-      memgraph_image:
+      app_image:
       cdk_command:
         description: 'Which CDK Command To Run'
         required: true
@@ -35,7 +26,7 @@ on:
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('CDK_Run-{0}-branch-{1}', tojson(inputs), github.ref_name) || '' }}
 jobs:
   build:
-    name: Deploy General Commons
+    name: Deploy Twistlock scan report
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
@@ -72,10 +63,7 @@ jobs:
       env:
         ENV_NAME: ${{ inputs.environment }}
         BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-        FRONTEND_IMAGE: ${{ inputs.frontend_image }}
-        BACKEND_IMAGE: ${{ inputs.backend_image }}
-        INTEROPERATION_IMAGE: ${{ inputs.interoperation_image }}
-        MEMGRAPH_IMAGE: ${{ inputs.memgraph_image }}
+        APP_IMAGE: ${{ inputs.app_image }}
         BUCKET_NAME: ${{ secrets.CDK_BUCKET }}
       run: |
         if [[ "$ENV_NAME" =~ ^(dev|dev2|qa|qa2|stage|prod)$ ]]; then

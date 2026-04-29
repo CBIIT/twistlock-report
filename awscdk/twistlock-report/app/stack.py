@@ -80,7 +80,9 @@ class Stack(Stack):
             certificates=[
                 alb_cert
             ],
-            port=443)
+            port=443,
+            ssl_policy=elbv2.SslPolicy.RECOMMENDED_TLS
+        )
 
         ### ALB Access log
         log_bucket = s3.Bucket.from_bucket_name(self, "AlbAccessLogsBucket", config['main']['alb_log_bucket_name'])
