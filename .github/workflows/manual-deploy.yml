@@ -47,7 +47,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         # install stack Python dependencies
-        cd awscdk/gc && pip3 install --ignore-installed --break-system-packages -r requirements.txt
+        cd awscdk/twistlock-report && pip3 install --ignore-installed --break-system-packages -r requirements.txt
         npm install -g aws-cdk@2.155.0
 
     - name: AWS OIDC Authentication
@@ -66,7 +66,7 @@ jobs:
         APP_IMAGE: ${{ inputs.app_image }}
         BUCKET_NAME: ${{ secrets.CDK_BUCKET }}
       run: |
-        if [[ "$ENV_NAME" =~ ^(dev|dev2|qa|qa2|stage|prod)$ ]]; then
+        if [[ "$ENV_NAME" =~ ^(dev|qa|stage|prod)$ ]]; then
           echo "Environment is $ENV_NAME"
         else
           BRANCH_NAME=$(echo $BRANCH_NAME | tr '_' '-')
@@ -77,16 +77,10 @@ jobs:
         vars=$(python3 awscdk/scripts/readYML.py awscdk/versions.yaml)
         for v in $vars; do command="export $v"; eval $command;  done
 
-        FRONTEND_IMAGE="${FRONTEND_IMAGE:-$IMAGE_FRONTEND}"
-        echo "FRONTEND_IMAGE=$FRONTEND_IMAGE" >> $GITHUB_ENV
-        BACKEND_IMAGE="${BACKEND_IMAGE:-$IMAGE_BACKEND}"
-        echo "BACKEND_IMAGE=$BACKEND_IMAGE" >> $GITHUB_ENV
-        INTEROPERATION_IMAGE="${INTEROPERATION_IMAGE:-$IMAGE_INTEROPERATION}"
-        echo "INTEROPERATION_IMAGE=$INTEROPERATION_IMAGE" >> $GITHUB_ENV
-        MEMGRAPH_IMAGE="${MEMGRAPH_IMAGE:-$IMAGE_MEMGRAPH}"
-        echo "MEMGRAPH_IMAGE=$MEMGRAPH_IMAGE" >> $GITHUB_ENV
+        APP_IMAGE="${APP_IMAGE:-$IMAGE_APP}"
+        echo "APP_IMAGE=$APP_IMAGE" >> $GITHUB_ENV
 
-        cd awscdk/gc/
+        cd awscdk/twistlock-report/
         #aws s3api get-object --bucket bento-mdb-cdk --key config/config.ini.$ENV_NAME ./config.ini.$ENV_NAME
         aws s3api get-object --bucket $BUCKET_NAME --key config/config.ini.$ENV_NAME ./config.ini.$ENV_NAME
         
@@ -101,7 +95,7 @@ jobs:
         CDK_CMD: ${{ inputs.cdk_command }}
       run: |
 
-        cd awscdk/gc && cdk $CDK_CMD --require-approval=never --force
+        cd awscdk/twistlock-report && cdk $CDK_CMD --require-approval=never --force
 
     - name: Update versions file
       env:
@@ -109,7 +103,7 @@ jobs:
         ENV_NAME: ${{ inputs.environment }}
         #BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       run: |
-        if [[ "${CDK_CMD}" == "deploy" && ( "${ENV_NAME}" == "dev" || "${ENV_NAME}" == "dev2" ) ]]; then
+        if [[ "${CDK_CMD}" == "deploy" && ( "${ENV_NAME}" == "dev" ) ]]; then
           echo "Updating versions.yaml file"
           python3 awscdk/scripts/writeYML.py awscdk/versions.yaml
         else
@@ -125,11 +119,11 @@ jobs:
             #git push -f origin "${BRANCH_NAME}"
         fi
   
-    - name: Slack Notification
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      uses: act10ns/slack@87c73aef9f8838eb6feae81589a6b1487a4a9e08     # v1.6.0
-      with:
-        status: ${{ job.status }}
-        steps: ${{ toJson(steps) }}
-      if: always()
+    #- name: Slack Notification
+      #env:
+        #SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #uses: act10ns/slack@87c73aef9f8838eb6feae81589a6b1487a4a9e08     # v1.6.0
+      #with:
+        #status: ${{ job.status }}
+        #steps: ${{ toJson(steps) }}
+      #if: always()
