@@ -63,7 +63,7 @@ jobs:
       env:
         ENV_NAME: ${{ inputs.environment }}
         BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-        APP_IMAGE: ${{ inputs.app_image }}
+        FRONTEND_IMAGE: ${{ inputs.app_image }}
         BUCKET_NAME: ${{ secrets.CDK_BUCKET }}
       run: |
         if [[ "$ENV_NAME" =~ ^(dev|qa|stage|prod)$ ]]; then
@@ -77,8 +77,8 @@ jobs:
         vars=$(python3 awscdk/scripts/readYML.py awscdk/versions.yaml)
         for v in $vars; do command="export $v"; eval $command;  done
 
-        APP_IMAGE="${APP_IMAGE:-$IMAGE_APP}"
-        echo "APP_IMAGE=$APP_IMAGE" >> $GITHUB_ENV
+        FRONTEND_IMAGE="${FRONTEND_IMAGE:-$IMAGE_FRONTEND}"
+        echo "FRONTEND_IMAGE=$FRONTEND_IMAGE" >> $GITHUB_ENV
 
         cd awscdk/twistlock-report/
         #aws s3api get-object --bucket bento-mdb-cdk --key config/config.ini.$ENV_NAME ./config.ini.$ENV_NAME
