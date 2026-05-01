@@ -48,7 +48,7 @@ jobs:
         python -m pip install --upgrade pip
         # install stack Python dependencies
         cd awscdk/twistlock-report && pip3 install --ignore-installed --break-system-packages -r requirements.txt
-        npm install -g aws-cdk@2.155.0
+        npm install -g aws-cdk@2
 
     - name: AWS OIDC Authentication
       id: aws-auth
