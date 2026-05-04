@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, Download, FileText, KeyRound, Search, ShieldAlert } from "lucide-react";
+import { Download, FileText, KeyRound, Search, ShieldAlert } from "lucide-react";
+
 
 const steps = [
 	{
@@ -53,20 +54,8 @@ const troubleshootingItems = [
 
 export default function DocsPage() {
 	return (
-		<main className="min-h-screen bg-[linear-gradient(180deg,#f7f9fc_0%,#eef3f8_55%,#ffffff_100%)] text-slate-900">
-			<div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-8 lg:px-10 lg:py-12">
-				<div className="flex items-center justify-between gap-4">
-					<Link
-						href="/"
-						className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
-					>
-						<ArrowLeft className="h-4 w-4" />
-						Back to app
-					</Link>
-					<div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
-						User guide
-					</div>
-				</div>
+		<main className="min-h-screen bg-[linear-gradient(180deg,#f7f9fc_0%,#eef3f8_55%,#ffffff_100%)] px-4 py-8 sm:px-6 lg:px-8 text-slate-900">
+			<div className="mx-auto flex w-full max-w-7xl flex-col gap-10">
 
 				<section className="grid gap-6 rounded-[2rem] border border-slate-200 bg-white/90 p-8 shadow-[0_20px_70px_-48px_rgba(15,23,42,0.55)] lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
 					<div className="space-y-5">
