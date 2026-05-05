@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { projectData, REPORTING_WEEK, type SortKey } from "@/app/dashboard/_data/dashboard-data";
-
+import { usePortfolioData, type SortKey } from "@/app/dashboard/_hooks/useDashboardApi";
 
 function Sparkline({ values }: { values: number[] }) {
+  if (values.length === 0) {
+    return <span className="text-xs text-slate-400">No data</span>;
+  }
+
   const max = Math.max(...values);
   const min = Math.min(...values);
   const width = 120;
@@ -30,19 +33,9 @@ function Sparkline({ values }: { values: number[] }) {
 export default function PortfolioOverviewDesign() {
   const [sortBy, setSortBy] = useState<SortKey>("critical");
   const [hasIssuesOnly, setHasIssuesOnly] = useState(true);
+  const { data, isLoading, error, reload } = usePortfolioData({ sortBy, hasIssuesOnly });
 
-  const projects = useMemo(() => {
-    const filtered = hasIssuesOnly
-      ? projectData.filter((p) => p.critical + p.high + p.medium + p.low > 0)
-      : projectData;
-
-    return [...filtered].sort((a, b) => {
-      if (sortBy === "project") {
-        return a.project.localeCompare(b.project);
-      }
-      return b[sortBy] - a[sortBy];
-    });
-  }, [hasIssuesOnly, sortBy]);
+  const projects = data?.projects ?? [];
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#e0f2fe_0%,#f8fafc_28%,#ffffff_65%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -54,7 +47,7 @@ export default function PortfolioOverviewDesign() {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Portfolio risk overview</h1>
             </div>
             <div className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-900">
-              Week: {REPORTING_WEEK}
+              Week: {data?.week ?? "-"}
             </div>
           </div>
         </header>
@@ -109,6 +102,26 @@ export default function PortfolioOverviewDesign() {
                   </tr>
                 </thead>
                 <tbody>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">Loading dashboard data...</td>
+                    </tr>
+                  ) : null}
+                  {!isLoading && error ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <p className="text-red-600">{error}</p>
+                          <Button type="button" variant="outline" size="sm" onClick={reload}>Retry</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  {!isLoading && !error && projects.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">No projects found for the selected filters.</td>
+                    </tr>
+                  ) : null}
                   {projects.map((row) => (
                     <tr key={row.project} className="border-t border-slate-200 bg-white">
                       <td className="px-4 py-3 font-semibold text-slate-900">{row.project}</td>

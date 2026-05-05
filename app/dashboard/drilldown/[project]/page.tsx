@@ -1,5 +1,10 @@
 import ProjectDrilldownDesign from "../../_components/ProjectDrilldownDesign";
 
-export default function DrilldownPage({ params }: { params: { project: string } }) {
-  return <ProjectDrilldownDesign projectSlug={params.project} />;
+type DrilldownPageProps = {
+  params: Promise<{ project: string }>;
+};
+
+export default async function DrilldownPage({ params }: DrilldownPageProps) {
+  const { project } = await params;
+  return <ProjectDrilldownDesign projectSlug={project} />;
 }

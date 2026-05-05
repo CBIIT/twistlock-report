@@ -1,24 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import {
-  getProjectBySlug,
-  projectData,
-  REPORTING_WEEK,
   severityStroke,
   severityTone,
-  trendWeeks,
-  type FixStatus,
-  type ProjectRecord,
   type Severity,
-  type TrendPoint,
 } from "@/app/dashboard/_data/dashboard-data";
+import {
+  useDrilldownData,
+  type FixStatus,
+  type TrendPoint,
+} from "@/app/dashboard/_hooks/useDashboardApi";
 
 function SeverityChip({ value }: { value: Severity }) {
   return (
@@ -33,16 +31,25 @@ function SeverityChip({ value }: { value: Severity }) {
   );
 }
 
-function TrendChart({ trendDetail, activeSeries }: { trendDetail: TrendPoint[]; activeSeries: Severity[] }) {
+function TrendChart({
+  trendDetail,
+  trendWeeks,
+  activeSeries,
+}: {
+  trendDetail: TrendPoint[];
+  trendWeeks: string[];
+  activeSeries: Severity[];
+}) {
   const chartHeight = 220;
   const chartWidth = 700;
-  const allValues = trendDetail.flatMap((d) => [d.critical, d.high, d.medium, d.low]);
+  const allValues = trendDetail.flatMap((d) => [d.critical, d.high, d.medium, d.low, 0]);
   const max = Math.max(...allValues) + 4;
+  const denominator = Math.max(trendDetail.length - 1, 1);
 
   function toPoints(key: Severity) {
     return trendDetail
       .map((point, index) => {
-        const x = (index / (trendDetail.length - 1)) * (chartWidth - 20) + 10;
+        const x = (index / denominator) * (chartWidth - 20) + 10;
         const y = chartHeight - (point[key] / max) * (chartHeight - 20) - 10;
         return `${x},${y}`;
       })
@@ -77,7 +84,7 @@ function TrendChart({ trendDetail, activeSeries }: { trendDetail: TrendPoint[]; 
           )}
 
           {trendWeeks.map((wk, idx) => {
-            const x = (idx / (trendWeeks.length - 1)) * (chartWidth - 20) + 10;
+            const x = (idx / Math.max(trendWeeks.length - 1, 1)) * (chartWidth - 20) + 10;
             return (
               <text key={wk} x={x} y={chartHeight - 1} textAnchor="middle" fontSize="11" fill="#475569">
                 {wk}
@@ -105,13 +112,7 @@ function cardTone(severity: Severity) {
   }
 }
 
-function resolveProject(slug: string): ProjectRecord {
-  return getProjectBySlug(slug) ?? projectData[0];
-}
-
 export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: string }) {
-  const selectedProject = resolveProject(projectSlug);
-
   const [selectedSeverities, setSelectedSeverities] = useState<Severity[]>(["critical", "high"]);
   const [activeTrendSeries, setActiveTrendSeries] = useState<Severity[]>(["critical", "high", "medium", "low"]);
   const [componentFilter, setComponentFilter] = useState("all");
@@ -119,27 +120,26 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
-  const components = useMemo(() => {
-    return Array.from(new Set(selectedProject.vulnerabilities.map((v) => v.component)));
-  }, [selectedProject]);
+  const pageSize = 50;
+  const { data, isLoading, error, reload } = useDrilldownData({
+    projectSlug,
+    selectedSeverities,
+    componentFilter,
+    fixFilter,
+    query,
+    page,
+    pageSize,
+  });
 
-  const filteredVulns = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return selectedProject.vulnerabilities.filter((v) => {
-      const severityMatch = selectedSeverities.includes(v.severity);
-      const componentMatch = componentFilter === "all" || v.component === componentFilter;
-      const fixMatch = fixFilter === "all" || v.fixStatus === fixFilter;
-      const searchMatch = !q || v.component.toLowerCase().includes(q) || v.cve.toLowerCase().includes(q) || v.pkg.toLowerCase().includes(q);
-
-      return severityMatch && componentMatch && fixMatch && searchMatch;
-    });
-  }, [componentFilter, fixFilter, query, selectedProject, selectedSeverities]);
-
-  const pageSize = 5;
-  const totalPages = Math.max(1, Math.ceil(filteredVulns.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageStart = (safePage - 1) * pageSize;
-  const visibleRows = filteredVulns.slice(pageStart, pageStart + pageSize);
+  const components = data?.filters.components ?? [];
+  const visibleRows = data?.rows ?? [];
+  const totalRows = data?.pagination.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = data?.pagination.page ?? page;
+  const displayPage = Math.min(safePage, totalPages);
+  const selectedProjectName = data?.project ?? decodeURIComponent(projectSlug).toUpperCase();
+  const reportingWeek = data?.week ?? "-";
+  const totals = data?.totals ?? { critical: 0, high: 0, medium: 0, low: 0 };
 
   function toggleSeverity(value: Severity, list: Severity[], setter: (v: Severity[]) => void) {
     if (list.includes(value)) {
@@ -162,7 +162,7 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Project drilldown</h1>
             </div>
             <div className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-900">
-              Week: {REPORTING_WEEK}
+              Week: {reportingWeek}
             </div>
           </div>
         </header>
@@ -176,10 +176,10 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                 </Link>
               </Button>
               <span>/</span>
-              <span className="font-semibold text-slate-900">{selectedProject.project}</span>
+              <span className="font-semibold text-slate-900">{selectedProjectName}</span>
             </div>
             <div className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-900">
-              Week: {REPORTING_WEEK}
+              Week: {reportingWeek}
             </div>
           </div>
 
@@ -187,13 +187,17 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
             {(["critical", "high", "medium", "low"] as Severity[]).map((sev) => (
               <article key={sev} className={cn("rounded-2xl border p-4", cardTone(sev))}>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-700">{sev}</p>
-                <p className="mt-2 text-3xl font-semibold text-slate-950">{selectedProject[sev]}</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{totals[sev]}</p>
               </article>
             ))}
           </div>
 
           <div className="mt-6">
-            <TrendChart trendDetail={selectedProject.trendDetail} activeSeries={activeTrendSeries} />
+            <TrendChart
+              trendDetail={data?.trendDetail ?? []}
+              trendWeeks={data?.trendWeeks ?? []}
+              activeSeries={activeTrendSeries}
+            />
             <div className="mt-4 flex flex-wrap gap-2">
               {(["critical", "high", "medium", "low"] as Severity[]).map((severity) => {
                 const active = activeTrendSeries.includes(severity);
@@ -307,8 +311,23 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleRows.map((row) => (
-                      <tr key={`${row.cve}-${row.component}`} className="border-t border-slate-100 align-top">
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-7 text-center text-slate-500">Loading vulnerabilities...</td>
+                      </tr>
+                    ) : null}
+                    {!isLoading && error ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-7 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <p className="text-red-600">{error}</p>
+                            <Button type="button" variant="outline" size="sm" onClick={reload}>Retry</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {visibleRows.map((row, index) => (
+                      <tr key={`${row.cve}-${row.component}-${row.pkg}-${row.packageVersion ?? "na"}-${index}`} className="border-t border-slate-100 align-top">
                         <td className="px-4 py-3 font-medium text-slate-800">{row.component}</td>
                         <td className="px-4 py-3 font-semibold text-slate-900">{row.cve}</td>
                         <td className="px-4 py-3"><SeverityChip value={row.severity} /></td>
@@ -320,7 +339,7 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                         <td className="px-4 py-3 capitalize text-slate-700">{row.fixStatus === "available" ? "fix available" : row.fixStatus}</td>
                       </tr>
                     ))}
-                    {visibleRows.length === 0 ? (
+                    {!isLoading && !error && visibleRows.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-7 text-center text-slate-500">No vulnerabilities match the selected filters.</td>
                       </tr>
@@ -332,14 +351,14 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <p>
-                Showing <span className="font-semibold text-slate-900">{visibleRows.length}</span> of {filteredVulns.length}
+                Showing <span className="font-semibold text-slate-900">{visibleRows.length}</span> of {totalRows}
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={displayPage === 1 || isLoading}>
                   <ArrowLeft className="h-4 w-4" /> Prev
                 </Button>
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium text-slate-900">{safePage} / {totalPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
+                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 font-medium text-slate-900">{displayPage} / {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={displayPage === totalPages || isLoading}>
                   Next <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
