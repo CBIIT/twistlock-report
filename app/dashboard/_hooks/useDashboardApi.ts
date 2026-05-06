@@ -151,7 +151,6 @@ export function useDrilldownData(input: {
   projectSlug: string;
   selectedSeverities: Severity[];
   componentFilter: string;
-  fixFilter: "all" | FixStatus;
   query: string;
   page: number;
   pageSize: number;
@@ -168,9 +167,6 @@ export function useDrilldownData(input: {
     if (input.componentFilter !== "all") {
       params.set("component", input.componentFilter);
     }
-    if (input.fixFilter !== "all") {
-      params.set("fixStatus", input.fixFilter);
-    }
 
     const searchText = debouncedQuery.trim();
     if (searchText) {
@@ -180,7 +176,6 @@ export function useDrilldownData(input: {
     return params.toString();
   }, [
     input.componentFilter,
-    input.fixFilter,
     input.page,
     input.pageSize,
     debouncedQuery,

@@ -14,7 +14,6 @@ import {
 } from "@/app/dashboard/_data/dashboard-data";
 import {
   useDrilldownData,
-  type FixStatus,
   type TrendPoint,
 } from "@/app/dashboard/_hooks/useDashboardApi";
 
@@ -116,7 +115,6 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
   const [selectedSeverities, setSelectedSeverities] = useState<Severity[]>(["critical", "high"]);
   const [activeTrendSeries, setActiveTrendSeries] = useState<Severity[]>(["critical", "high", "medium", "low"]);
   const [componentFilter, setComponentFilter] = useState("all");
-  const [fixFilter, setFixFilter] = useState<"all" | FixStatus>("all");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
@@ -125,7 +123,6 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
     projectSlug,
     selectedSeverities,
     componentFilter,
-    fixFilter,
     query,
     page,
     pageSize,
@@ -263,24 +260,6 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                   </select>
                 </label>
 
-                <label className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Fix
-                  <select
-                    value={fixFilter}
-                    onChange={(e) => {
-                      setFixFilter(e.target.value as "all" | FixStatus);
-                      setPage(1);
-                    }}
-                    className="ml-2 bg-transparent font-medium text-slate-900 outline-none"
-                    aria-label="Filter by fix status"
-                  >
-                    <option value="all">All</option>
-                    <option value="fixed">Fixed</option>
-                    <option value="available">Fix available</option>
-                    <option value="none">No fix</option>
-                  </select>
-                </label>
-
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
@@ -307,18 +286,17 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                       <th className="px-4 py-3">Severity</th>
                       <th className="px-4 py-3">CVSS</th>
                       <th className="px-4 py-3">Package</th>
-                      <th className="px-4 py-3">Fix status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-7 text-center text-slate-500">Loading vulnerabilities...</td>
+                        <td colSpan={5} className="px-4 py-7 text-center text-slate-500">Loading vulnerabilities...</td>
                       </tr>
                     ) : null}
                     {!isLoading && error ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-7 text-center">
+                        <td colSpan={5} className="px-4 py-7 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <p className="text-red-600">{error}</p>
                             <Button type="button" variant="outline" size="sm" onClick={reload}>Retry</Button>
@@ -336,12 +314,11 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                           {row.pkg}
                           {row.packageVersion ? <span className="text-slate-500"> ({row.packageVersion})</span> : null}
                         </td>
-                        <td className="px-4 py-3 capitalize text-slate-700">{row.fixStatus === "available" ? "fix available" : row.fixStatus}</td>
                       </tr>
                     ))}
                     {!isLoading && !error && visibleRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-7 text-center text-slate-500">No vulnerabilities match the selected filters.</td>
+                        <td colSpan={5} className="px-4 py-7 text-center text-slate-500">No vulnerabilities match the selected filters.</td>
                       </tr>
                     ) : null}
                   </tbody>
