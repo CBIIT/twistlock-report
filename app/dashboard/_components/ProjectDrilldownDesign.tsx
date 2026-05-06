@@ -158,8 +158,8 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
         <header className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_20px_70px_-52px_rgba(15,23,42,0.65)] backdrop-blur md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Twistlock vulnerability dashboard</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Project drilldown</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Twistlock Production Vulnerability Risk Overview</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Project Details</h1>
             </div>
             <div className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-900">
               Week: {reportingWeek}
