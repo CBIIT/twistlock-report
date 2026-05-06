@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSessionAuth } from "@/lib/useSessionAuth";
 
 type ComponentRecord = {
   id: number;
@@ -31,6 +32,7 @@ function formatTimestamp(value: string): string {
 }
 
 export default function AdminPage() {
+  const { isChecking, isAuthenticated } = useSessionAuth("/");
   const [rows, setRows] = useState<ComponentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +98,10 @@ export default function AdminPage() {
       );
     });
   }, [projectFilter, searchText, sortedRows]);
+
+  if (isChecking || !isAuthenticated) {
+    return null;
+  }
 
   function beginEdit(row: ComponentRecord) {
     setSavingError(null);

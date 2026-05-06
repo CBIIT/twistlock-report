@@ -1,32 +1,26 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReportForm from "@/components/ReportForm";
+import { useSessionAuth } from "@/lib/useSessionAuth";
 
 
 export default function ReportPage() {
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    const saved = sessionStorage.getItem("twistlockToken");
-    if (saved) {
-      setToken(saved);
-    }
-  }, []);
+  const { token, isChecking, isAuthenticated } = useSessionAuth("/");
 
   function handleSessionExpired() {
     sessionStorage.removeItem("twistlockToken");
-    setToken(null);
     router.push("/");
   }
 
   function handleLogout() {
     sessionStorage.removeItem("twistlockToken");
-    setToken(null);
     router.push("/");
+  }
+
+  if (isChecking || !isAuthenticated || !token) {
+    return null;
   }
 
   return (
@@ -34,19 +28,7 @@ export default function ReportPage() {
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl flex-col gap-6">
         <div>
           <section className="w-full rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_24px_80px_-52px_rgba(15,23,42,0.45)]">
-            {token ? (
-              <ReportForm token={token} onSessionExpired={handleSessionExpired} onLogout={handleLogout} />
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-600">Please sign in from the home page to access the report generator.</p>
-                <Link
-                  href="/"
-                  className="inline-flex items-center rounded-full border border-slate-900 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                >
-                  Go to Login
-                </Link>
-              </div>
-            )}
+            <ReportForm token={token} onSessionExpired={handleSessionExpired} onLogout={handleLogout} />
           </section>
         </div>
       </div>
