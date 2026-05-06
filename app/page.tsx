@@ -1,32 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import LoginForm from "@/components/LoginForm";
-import ReportForm from "@/components/ReportForm";
 
 export default function Home() {
-  const [token, setToken] = useState<string | null>(null);
-  const [expiredMessage, setExpiredMessage] = useState<string | undefined>();
-
-  function handleSessionExpired() {
-    setToken(null);
-    setExpiredMessage("Your session has expired. Please log in again.");
-  }
+  const router = useRouter();
 
   function handleLogin(newToken: string) {
-    setToken(newToken);
-    setExpiredMessage(undefined);
+    sessionStorage.setItem("twistlockToken", newToken);
+    router.push("/report");
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e0f2fe_0%,#f8fafc_30%,#f8fafc_100%)] p-6">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col gap-6 lg:justify-center">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e0f2fe_0%,#f8fafc_30%,#f8fafc_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-7xl flex-col gap-6 lg:justify-center">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700"></p>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Twistlock Portal</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-              Container Scan Report Generator
+              Vulnerability Dashboard &amp; Scan Reports
             </h1>
           </div>
 
@@ -38,7 +31,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
           <section className="rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-white shadow-[0_24px_80px_-52px_rgba(15,23,42,0.85)]">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-300">Overview</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">
@@ -73,11 +66,15 @@ export default function Home() {
           </section>
 
           <section className="w-full rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_24px_80px_-52px_rgba(15,23,42,0.45)]">
-            {token ? (
-              <ReportForm token={token} onSessionExpired={handleSessionExpired} onLogout={() => setToken(null)} />
-            ) : (
-              <LoginForm onLogin={handleLogin} expiredMessage={expiredMessage} />
-            )}
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Login</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">Sign in to continue</h2>
+            <p className="mt-4 text-sm leading-7 text-slate-600">
+              After login, you will be redirected to the Report Generator page.
+            </p>
+
+            <div className="mt-6">
+              <LoginForm onLogin={handleLogin} />
+            </div>
           </section>
         </div>
       </div>

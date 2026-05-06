@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "reports": "tsx --env-file=.env scripts/generate-reports.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -15,6 +16,7 @@
     "docxtemplater": "^3.68.3",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "pg": "^8.20.0",
     "pizzip": "^3.2.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
@@ -28,6 +30,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

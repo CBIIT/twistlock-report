@@ -32,6 +32,7 @@ interface ReportFormProps {
 export default function ReportForm({ token, onSessionExpired, onLogout }: ReportFormProps) {
 	const [phase, setPhase] = useState<"search" | "select">("search");
 	const [repos, setRepos] = useState<RepoSelection[]>([]);
+	const [activeTagPicker, setActiveTagPicker] = useState<number | null>(null);
 	const [isSearching, setIsSearching] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [status, setStatus] = useState<StatusState | null>(null);
@@ -81,7 +82,7 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 			const data = (await response.json()) as { repositories: ProjectSearchResult[] };
 			const selections: RepoSelection[] = data.repositories.map((r) => ({
 				repo: r.repo,
-				availableTags: r.tags.map((t) => t.tag),
+				availableTags: r.tags.map((t) => t.tag).slice(0,9),
 				selectedTag: r.tags[0]?.tag ?? "",
 				checked: true,
 			}));
@@ -118,6 +119,7 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 
 	function goBack() {
 		setPhase("search");
+		setActiveTagPicker(null);
 		setStatus(null);
 	}
 
@@ -299,18 +301,49 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 									<span className="flex-1 font-mono text-sm font-medium">
 										{repo.repo}
 									</span>
-									<select
-										className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
-										value={repo.selectedTag}
-										onChange={(e) => changeTag(index, e.target.value)}
-										disabled={isGenerating}
-									>
-										{repo.availableTags.map((tag) => (
-											<option key={tag} value={tag}>
-												{tag}
-											</option>
-										))}
-									</select>
+									<div className="relative w-52">
+										<input
+											className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
+											value={repo.selectedTag}
+											onChange={(e) => {
+												changeTag(index, e.target.value);
+												setActiveTagPicker(index);
+											}}
+											onFocus={() => setActiveTagPicker(index)}
+											onBlur={() => {
+												setTimeout(() => setActiveTagPicker((prev) => (prev === index ? null : prev)), 120);
+											}}
+											disabled={isGenerating}
+											placeholder="Search tag"
+										/>
+										{activeTagPicker === index ? (
+											<div className="mt-1 max-h-48 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-sm">
+												{repo.availableTags
+													.filter((tag) =>
+														tag.toLowerCase().includes(repo.selectedTag.toLowerCase())
+													)
+													.map((tag) => (
+														<button
+															key={tag}
+															type="button"
+															className="block w-full px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-100"
+															onMouseDown={(e) => {
+																e.preventDefault();
+																changeTag(index, tag);
+																setActiveTagPicker(null);
+															}}
+														>
+															{tag}
+														</button>
+													))}
+												{repo.availableTags.filter((tag) =>
+													tag.toLowerCase().includes(repo.selectedTag.toLowerCase())
+												).length === 0 ? (
+													<div className="px-2 py-1.5 text-xs text-gray-500">No matching tags</div>
+												) : null}
+											</div>
+										) : null}
+									</div>
 								</div>
 							))}
 						</div>

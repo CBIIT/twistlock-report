@@ -61,7 +61,7 @@ export async function resolveRegistry(
 	const search = buildSearchParam(imageName, imageTag);
 	const url =
 		`${getBaseUrl()}/api/v1/registry` +
-		"?collections=CRDC+CCDI+All+Collection&compact=true&limit=17&offset=0" +
+		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
 		`&project=Central+Console&reverse=true&search=${search}&sort=vulnerabilityRiskScore`;
 
 	const res = await fetch(url, { headers: authHeader(token) });
@@ -123,7 +123,7 @@ export async function getScanResult(
 	return match;
 }
 
-const MAX_TAGS_PER_REPO = 5;
+const MAX_TAGS_PER_REPO = 100;
 
 export async function searchByProject(
 	projectName: string,
@@ -132,7 +132,7 @@ export async function searchByProject(
 	const search = encodeURIComponent(projectName);
 	const url =
 		`${getBaseUrl()}/api/v1/registry` +
-		"?collections=CRDC+CCDI+All+Collection&compact=true&limit=100&offset=0" +
+		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
 		`&project=Central+Console&reverse=true&search=${search}&sort=vulnerabilityRiskScore`;
 
 	const res = await fetch(url, { headers: authHeader(token) });
