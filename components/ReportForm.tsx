@@ -82,7 +82,7 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 			const data = (await response.json()) as { repositories: ProjectSearchResult[] };
 			const selections: RepoSelection[] = data.repositories.map((r) => ({
 				repo: r.repo,
-				availableTags: r.tags.map((t) => t.tag).slice(0, 10),
+				availableTags: r.tags.map((t) => t.tag).slice(0,9),
 				selectedTag: r.tags[0]?.tag ?? "",
 				checked: true,
 			}));
