@@ -167,17 +167,37 @@ export async function getPortfolioPayload(options: {
 			FROM scans s
 			WHERE s.week = $1
 			ORDER BY s.component_id, s.scanned_at DESC
+		),
+		unique_vulnerabilities AS (
+			SELECT DISTINCT ON (c.project, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+				c.project,
+				c.image_name AS component,
+				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
+				LOWER(v.severity) AS severity
+			FROM latest_scans ls
+			JOIN components c ON c.id = ls.component_id
+			JOIN vulnerabilities v ON v.scan_id = ls.id
+			WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
+			ORDER BY
+				c.project,
+				c.image_name,
+				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
+				CASE LOWER(v.severity)
+					WHEN 'critical' THEN 1
+					WHEN 'high' THEN 2
+					WHEN 'medium' THEN 3
+					WHEN 'low' THEN 4
+					ELSE 5
+				END
 		)
 		SELECT
-			c.project,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'critical') AS critical,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'high') AS high,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'medium') AS medium,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'low') AS low
-		FROM latest_scans ls
-		JOIN components c ON c.id = ls.component_id
-		LEFT JOIN vulnerabilities v ON v.scan_id = ls.id
-		GROUP BY c.project
+			project,
+			COUNT(*) FILTER (WHERE severity = 'critical') AS critical,
+			COUNT(*) FILTER (WHERE severity = 'high') AS high,
+			COUNT(*) FILTER (WHERE severity = 'medium') AS medium,
+			COUNT(*) FILTER (WHERE severity = 'low') AS low
+		FROM unique_vulnerabilities
+		GROUP BY project
 	`, [week]);
 
 	const trendRows: TrendRow[] = trendWeeks.length
@@ -190,15 +210,28 @@ export async function getPortfolioPayload(options: {
 				FROM scans s
 				WHERE s.week = ANY($1::text[])
 				ORDER BY s.week, s.component_id, s.scanned_at DESC
+			),
+			unique_vulnerabilities AS (
+				SELECT DISTINCT ON (c.project, lws.week, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+					c.project,
+					lws.week,
+					c.image_name AS component,
+					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id
+				FROM latest_week_component_scans lws
+				JOIN components c ON c.id = lws.component_id
+				JOIN vulnerabilities v ON v.scan_id = lws.id
+				ORDER BY
+					c.project,
+					lws.week,
+					c.image_name,
+					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN')
 			)
 			SELECT
-				c.project,
-				lws.week,
-				COUNT(v.id) AS total_vulns
-			FROM latest_week_component_scans lws
-			JOIN components c ON c.id = lws.component_id
-			LEFT JOIN vulnerabilities v ON v.scan_id = lws.id
-			GROUP BY c.project, lws.week
+				project,
+				week,
+				COUNT(*) AS total_vulns
+			FROM unique_vulnerabilities
+			GROUP BY project, week
 		`, [trendWeeks])
 		: [];
 
@@ -312,14 +345,33 @@ export async function getDrilldownPayload(options: {
 			WHERE s.week = $1
 				AND LOWER(c.project) = LOWER($2)
 			ORDER BY s.component_id, s.scanned_at DESC
+		),
+		unique_vulnerabilities AS (
+			SELECT DISTINCT ON (c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+				c.image_name AS component,
+				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
+				LOWER(v.severity) AS severity
+			FROM latest_scans ls
+			JOIN components c ON c.id = ls.component_id
+			JOIN vulnerabilities v ON v.scan_id = ls.id
+			WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
+			ORDER BY
+				c.image_name,
+				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
+				CASE LOWER(v.severity)
+					WHEN 'critical' THEN 1
+					WHEN 'high' THEN 2
+					WHEN 'medium' THEN 3
+					WHEN 'low' THEN 4
+					ELSE 5
+				END
 		)
 		SELECT
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'critical') AS critical,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'high') AS high,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'medium') AS medium,
-			COUNT(*) FILTER (WHERE LOWER(v.severity) = 'low') AS low
-		FROM latest_scans ls
-		LEFT JOIN vulnerabilities v ON v.scan_id = ls.id
+			COUNT(*) FILTER (WHERE severity = 'critical') AS critical,
+			COUNT(*) FILTER (WHERE severity = 'high') AS high,
+			COUNT(*) FILTER (WHERE severity = 'medium') AS medium,
+			COUNT(*) FILTER (WHERE severity = 'low') AS low
+		FROM unique_vulnerabilities
 	`, [week, project]);
 
 	const totals = {
@@ -342,17 +394,38 @@ export async function getDrilldownPayload(options: {
 				WHERE s.week = ANY($1::text[])
 					AND LOWER(c.project) = LOWER($2)
 				ORDER BY s.week, s.component_id, s.scanned_at DESC
+			),
+			unique_vulnerabilities AS (
+				SELECT DISTINCT ON (ls.week, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+					ls.week,
+					c.image_name AS component,
+					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
+					LOWER(v.severity) AS severity
+				FROM latest_scans ls
+				JOIN components c ON c.id = ls.component_id
+				JOIN vulnerabilities v ON v.scan_id = ls.id
+				WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
+				ORDER BY
+					ls.week,
+					c.image_name,
+					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
+					CASE LOWER(v.severity)
+						WHEN 'critical' THEN 1
+						WHEN 'high' THEN 2
+						WHEN 'medium' THEN 3
+						WHEN 'low' THEN 4
+						ELSE 5
+					END
 			)
 			SELECT
-				ls.week,
-				COUNT(*) FILTER (WHERE LOWER(v.severity) = 'critical') AS critical,
-				COUNT(*) FILTER (WHERE LOWER(v.severity) = 'high') AS high,
-				COUNT(*) FILTER (WHERE LOWER(v.severity) = 'medium') AS medium,
-				COUNT(*) FILTER (WHERE LOWER(v.severity) = 'low') AS low
-			FROM latest_scans ls
-			LEFT JOIN vulnerabilities v ON v.scan_id = ls.id
-			GROUP BY ls.week
-			ORDER BY ls.week
+				week,
+				COUNT(*) FILTER (WHERE severity = 'critical') AS critical,
+				COUNT(*) FILTER (WHERE severity = 'high') AS high,
+				COUNT(*) FILTER (WHERE severity = 'medium') AS medium,
+				COUNT(*) FILTER (WHERE severity = 'low') AS low
+			FROM unique_vulnerabilities
+			GROUP BY week
+			ORDER BY week
 		`, [trendWeeks, project])
 		: [];
 
@@ -386,7 +459,7 @@ export async function getDrilldownPayload(options: {
 		base AS (
 			SELECT
 				c.image_name AS component,
-				v.cve_id,
+				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
 				LOWER(v.severity) AS severity,
 				v.cvss,
 				v.package_name,
@@ -413,13 +486,37 @@ export async function getDrilldownPayload(options: {
 					OR LOWER(COALESCE(package_name, '')) LIKE '%' || LOWER($6) || '%'
 					OR LOWER(component) LIKE '%' || LOWER($6) || '%'
 				)
+		),
+		deduped AS (
+			SELECT DISTINCT ON (component, cve_id)
+				component,
+				cve_id,
+				severity,
+				cvss,
+				package_name,
+				package_version,
+				fix_status
+			FROM filtered
+			ORDER BY
+				component,
+				cve_id,
+				CASE severity
+					WHEN 'critical' THEN 1
+					WHEN 'high' THEN 2
+					WHEN 'medium' THEN 3
+					WHEN 'low' THEN 4
+					ELSE 5
+				END,
+				cvss DESC NULLS LAST,
+				package_name NULLS LAST,
+				package_version NULLS LAST
 		)
 	`;
 
 	const vulnerabilityRows = await query<DrilldownVulnerabilityRow>(
 		`${vulnerabilitySql}
 		SELECT component, cve_id, severity, cvss, package_name, package_version, fix_status
-		FROM filtered
+		FROM deduped
 		ORDER BY
 			CASE severity
 				WHEN 'critical' THEN 1
@@ -436,7 +533,7 @@ export async function getDrilldownPayload(options: {
 
 	const countRows = await query<CountRow>(
 		`${vulnerabilitySql}
-		SELECT COUNT(*) AS total FROM filtered
+		SELECT COUNT(*) AS total FROM deduped
 	`, [week, project, selectedSeverities, componentFilter, fixStatusFilter, q]
 	);
 
