@@ -19,22 +19,29 @@ class frontendService:
         command = [config[service]['command']]
     else:
         command = None
-    
-    #environment={
+
+    environment={
+            TWISTLOCK_BASE_URL:"https://twistlock.nci.nih.gov",
             #"NEW_RELIC_LABELS":"Project:{};Environment:{}".format('gc', config['main']['tier']),
             #"NEW_RELIC_NO_CONFIG_FILE":"true",
             #"REACT_APP_ABOUT_CONTENT_URL":config[service]['about_content_url'],
             #"REACT_APP_AUTH_API":self.app_url,
             #"REACT_APP_AUTH_SERVICE_API":f"{self.app_url}/api/auth/",
             #"REACT_APP_USER_SERVICE_API":f"{self.app_url}/api/users/",
-        #}
+        }
 
-    #secrets={
+    secrets={
+            "POSTGRES_USER":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_user", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'username'),
+            "POSTGRES_PASSWORD":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_password", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'password'),
+            "POSTGRES_HOST":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_host", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'host'),
+            "POSTGRES_PORT":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_port", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'port'),
+            "POSTGRES_DB":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_db", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'dbname'),
+
             #"NEW_RELIC_LICENSE_KEY":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_newrelic", secret_name='monitoring/newrelic'), 'api_key'),
             #"REACT_APP_NIH_CLIENT_ID":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_provider_id", secret_name='auth/provider/nih'), 'nih_client_id'),
             #"REACT_APP_NIH_AUTH_URL":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_provider_url", secret_name='auth/provider/nih'), 'nih_client_url'),
             #"REACT_APP_GOOGLE_CLIENT_ID":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_google", secret_name='auth/provider/google'), 'idp_client_id'),
-        #}
+        }
     
     taskDefinition = ecs.FargateTaskDefinition(self,
         "{}-{}-taskDef".format(self.namingPrefix, service),
@@ -54,8 +61,8 @@ class frontendService:
         memory_limit_mib=config.getint(service, 'memory'),
         port_mappings=[ecs.PortMapping(container_port=config.getint(service, 'port'), name=service)],
         command=command,
-        #environment=environment,
-        #secrets=secrets,
+        environment=environment,
+        secrets=secrets,
         logging=ecs.LogDrivers.aws_logs(
             stream_prefix="{}-{}".format(self.namingPrefix, service)
         )
