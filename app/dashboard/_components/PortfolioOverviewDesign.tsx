@@ -6,6 +6,10 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortfolioData, type SortKey } from "@/app/dashboard/_hooks/useDashboardApi";
 
+function formatProjectName(project: string) {
+  return project.toUpperCase();
+}
+
 function Sparkline({ values }: { values: number[] }) {
   if (values.length === 0) {
     return <span className="text-xs text-slate-400">No data</span>;
@@ -124,7 +128,7 @@ export default function PortfolioOverviewDesign() {
                   ) : null}
                   {projects.map((row) => (
                     <tr key={row.project} className="border-t border-slate-200 bg-white">
-                      <td className="px-4 py-3 font-semibold text-slate-900">{row.project}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">{formatProjectName(row.project)}</td>
                       <td className="px-4 py-3 text-red-700">{row.critical}</td>
                       <td className="px-4 py-3 text-amber-700">{row.high}</td>
                       <td className="px-4 py-3 text-sky-700">{row.medium}</td>
