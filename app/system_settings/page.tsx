@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSessionAuth } from "@/lib/useSessionAuth";
@@ -19,6 +20,9 @@ type ComponentForm = {
   imageName: string;
   currentTag: string;
 };
+
+type SortKey = "id" | "project" | "imageName" | "currentTag" | "createdAt";
+type SortDirection = "asc" | "desc";
 
 const emptyForm: ComponentForm = {
   project: "",
@@ -50,6 +54,8 @@ export default function AdminPage() {
 
   const [projectFilter, setProjectFilter] = useState("all");
   const [searchText, setSearchText] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("id");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const isBusy = isAdding || isSavingEdit || deletingId !== null;
 
@@ -78,8 +84,20 @@ export default function AdminPage() {
   }, [loadComponents]);
 
   const sortedRows = useMemo(() => {
-    return [...rows].sort((a, b) => b.id - a.id);
-  }, [rows]);
+    const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+    return [...rows].sort((a, b) => {
+      if (sortBy === "id") {
+        return (a.id - b.id) * directionMultiplier;
+      }
+
+      if (sortBy === "createdAt") {
+        return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * directionMultiplier;
+      }
+
+      return a[sortBy].localeCompare(b[sortBy]) * directionMultiplier;
+    });
+  }, [rows, sortBy, sortDirection]);
 
   const projectOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.project))).sort((a, b) => a.localeCompare(b));
@@ -106,6 +124,36 @@ export default function AdminPage() {
   }
 
   const isReadOnly = !isIamLoading && !canCreate && !canUpdate && !canDelete;
+
+  function handleSort(nextKey: SortKey) {
+    if (nextKey === sortBy) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortBy(nextKey);
+    setSortDirection(nextKey === "id" || nextKey === "createdAt" ? "desc" : "asc");
+  }
+
+  function getSortLabel(key: SortKey) {
+    if (sortBy !== key) {
+      return "Sort";
+    }
+
+    return sortDirection === "asc" ? "Sorted ascending" : "Sorted descending";
+  }
+
+  function renderSortIcon(key: SortKey) {
+    if (sortBy !== key) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />;
+    }
+
+    if (sortDirection === "asc") {
+      return <ArrowUp className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
+    }
+
+    return <ArrowDown className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
+  }
 
   function beginEdit(row: ComponentRecord) {
     setSavingError(null);
@@ -251,11 +299,61 @@ export default function AdminPage() {
               <table className="w-full min-w-[980px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">ID</th>
-                    <th className="px-4 py-3">Project</th>
-                    <th className="px-4 py-3">Image Name</th>
-                    <th className="px-4 py-3">Current Tag</th>
-                    <th className="px-4 py-3">Created At</th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("id")}
+                        aria-label={`Sort by ID. ${getSortLabel("id")}`}
+                      >
+                        <span>ID</span>
+                        {renderSortIcon("id")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("project")}
+                        aria-label={`Sort by project. ${getSortLabel("project")}`}
+                      >
+                        <span>Project</span>
+                        {renderSortIcon("project")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("imageName")}
+                        aria-label={`Sort by image name. ${getSortLabel("imageName")}`}
+                      >
+                        <span>Image Name</span>
+                        {renderSortIcon("imageName")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("currentTag")}
+                        aria-label={`Sort by current tag. ${getSortLabel("currentTag")}`}
+                      >
+                        <span>Current Tag</span>
+                        {renderSortIcon("currentTag")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("createdAt")}
+                        aria-label={`Sort by created at. ${getSortLabel("createdAt")}`}
+                      >
+                        <span>Created At</span>
+                        {renderSortIcon("createdAt")}
+                      </button>
+                    </th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
