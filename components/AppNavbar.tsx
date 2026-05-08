@@ -12,7 +12,7 @@ const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/docs", label: "User Guide" },
   { href: "/report", label: "Report Generator" },
-  { href: "/admin", label: "System Settings" },
+  { href: "/system_settings", label: "System Settings" },
 ];
 
 export default function AppNavbar({ className }: AppNavbarProps) {

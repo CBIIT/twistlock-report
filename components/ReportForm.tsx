@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
@@ -33,6 +34,7 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 	const [phase, setPhase] = useState<"search" | "select">("search");
 	const [repos, setRepos] = useState<RepoSelection[]>([]);
 	const [activeTagPicker, setActiveTagPicker] = useState<number | null>(null);
+	const [showAllTagOptionsFor, setShowAllTagOptionsFor] = useState<number | null>(null);
 	const [isSearching, setIsSearching] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [status, setStatus] = useState<StatusState | null>(null);
@@ -120,7 +122,21 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 	function goBack() {
 		setPhase("search");
 		setActiveTagPicker(null);
+		setShowAllTagOptionsFor(null);
 		setStatus(null);
+	}
+
+	function getFilteredTags(repo: RepoSelection, index: number): string[] {
+		if (showAllTagOptionsFor === index) {
+			return repo.availableTags;
+		}
+
+		const query = repo.selectedTag.trim().toLowerCase();
+		if (!query) {
+			return repo.availableTags;
+		}
+
+		return repo.availableTags.filter((tag) => tag.toLowerCase().includes(query));
 	}
 
 	async function onGenerate(): Promise<void> {
@@ -285,6 +301,9 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 
 						<div>
 							{repos.map((repo, index) => (
+								(() => {
+									const matchingTags = getFilteredTags(repo, index);
+									return (
 								<div
 									key={repo.repo}
 									className={`flex items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50 transition-opacity ${
@@ -303,26 +322,46 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 									</span>
 									<div className="relative w-52">
 										<input
-											className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
+											className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 pr-8 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
 											value={repo.selectedTag}
 											onChange={(e) => {
 												changeTag(index, e.target.value);
 												setActiveTagPicker(index);
+												setShowAllTagOptionsFor(null);
 											}}
-											onFocus={() => setActiveTagPicker(index)}
+											onFocus={() => {
+												setActiveTagPicker(index);
+												setShowAllTagOptionsFor(index);
+											}}
+											onClick={() => {
+												setActiveTagPicker(index);
+												setShowAllTagOptionsFor(index);
+											}}
 											onBlur={() => {
-												setTimeout(() => setActiveTagPicker((prev) => (prev === index ? null : prev)), 120);
+												setTimeout(() => {
+													setActiveTagPicker((prev) => (prev === index ? null : prev));
+													setShowAllTagOptionsFor((prev) => (prev === index ? null : prev));
+												}, 120);
 											}}
 											disabled={isGenerating}
 											placeholder="Search tag"
 										/>
+										<button
+											type="button"
+											className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:text-gray-700"
+											disabled={isGenerating}
+											onMouseDown={(e) => e.preventDefault()}
+											onClick={() => {
+												setActiveTagPicker(index);
+												setShowAllTagOptionsFor((prev) => (prev === index ? null : index));
+											}}
+											aria-label="Toggle tag options"
+										>
+											<ChevronDown className="h-3.5 w-3.5" />
+										</button>
 										{activeTagPicker === index ? (
 											<div className="mt-1 max-h-48 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-sm">
-												{repo.availableTags
-													.filter((tag) =>
-														tag.toLowerCase().includes(repo.selectedTag.toLowerCase())
-													)
-													.map((tag) => (
+												{matchingTags.map((tag) => (
 														<button
 															key={tag}
 															type="button"
@@ -331,20 +370,21 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 																e.preventDefault();
 																changeTag(index, tag);
 																setActiveTagPicker(null);
+																setShowAllTagOptionsFor(null);
 															}}
 														>
 															{tag}
 														</button>
 													))}
-												{repo.availableTags.filter((tag) =>
-													tag.toLowerCase().includes(repo.selectedTag.toLowerCase())
-												).length === 0 ? (
+												{matchingTags.length === 0 ? (
 													<div className="px-2 py-1.5 text-xs text-gray-500">No matching tags</div>
 												) : null}
 											</div>
 										) : null}
 									</div>
 								</div>
+									);
+								})()
 							))}
 						</div>
 					</div>

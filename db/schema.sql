@@ -48,3 +48,12 @@ ALTER TABLE
   public.vulnerabilities
 ADD
   CONSTRAINT vulnerabilities_pkey PRIMARY KEY (id)
+
+
+
+  CREATE TABLE iam (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL,
+    service VARCHAR(100) NOT NULL,
+    role VARCHAR(100) NOT NULL
+);

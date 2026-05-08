@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -111,12 +111,29 @@ function cardTone(severity: Severity) {
   }
 }
 
+function isCveIdentifier(value: string): boolean {
+  return value.trim().toUpperCase().startsWith("CVE");
+}
+
+function getVulnerabilityReferenceUrl(value: string): string {
+  const trimmed = value.trim();
+  if (isCveIdentifier(trimmed)) {
+    return `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(trimmed)}`;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
 export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: string }) {
+  type VulnerabilitySortKey = "component" | "cve" | "severity" | "cvss" | "pkg";
+  type SortDirection = "asc" | "desc";
+
   const [selectedSeverities, setSelectedSeverities] = useState<Severity[]>(["critical", "high"]);
   const [activeTrendSeries, setActiveTrendSeries] = useState<Severity[]>(["critical", "high", "medium", "low"]);
   const [componentFilter, setComponentFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<VulnerabilitySortKey>("severity");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const pageSize = 50;
   const { data, isLoading, error, reload } = useDrilldownData({
@@ -129,7 +146,36 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
   });
 
   const components = data?.filters.components ?? [];
-  const visibleRows = data?.rows ?? [];
+  const visibleRows = useMemo(() => {
+    const rows = [...(data?.rows ?? [])];
+    const severityRank: Record<Severity, number> = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
+    const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+    rows.sort((a, b) => {
+      if (sortBy === "cvss") {
+        return (a.cvss - b.cvss) * directionMultiplier;
+      }
+
+      if (sortBy === "severity") {
+        return (severityRank[a.severity] - severityRank[b.severity]) * directionMultiplier;
+      }
+
+      if (sortBy === "pkg") {
+        const aPkg = `${a.pkg} ${a.packageVersion ?? ""}`.trim().toLowerCase();
+        const bPkg = `${b.pkg} ${b.packageVersion ?? ""}`.trim().toLowerCase();
+        return aPkg.localeCompare(bPkg) * directionMultiplier;
+      }
+
+      return a[sortBy].localeCompare(b[sortBy]) * directionMultiplier;
+    });
+
+    return rows;
+  }, [data?.rows, sortBy, sortDirection]);
   const totalRows = data?.pagination.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = data?.pagination.page ?? page;
@@ -147,6 +193,35 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
       return;
     }
     setter([...list, value]);
+  }
+
+  function handleSort(nextKey: VulnerabilitySortKey) {
+    if (nextKey === sortBy) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortBy(nextKey);
+    setSortDirection(nextKey === "cvss" || nextKey === "severity" ? "desc" : "asc");
+  }
+
+  function getSortLabel(key: VulnerabilitySortKey) {
+    if (sortBy !== key) {
+      return "Sort";
+    }
+    return sortDirection === "asc" ? "Sorted asc" : "Sorted desc";
+  }
+
+  function renderSortIcon(key: VulnerabilitySortKey) {
+    if (sortBy !== key) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />;
+    }
+
+    if (sortDirection === "asc") {
+      return <ArrowUp className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
+    }
+
+    return <ArrowDown className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
   }
 
   return (
@@ -281,11 +356,61 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                 <table className="w-full min-w-[980px] text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-600">
                     <tr>
-                      <th className="px-4 py-3">Component</th>
-                      <th className="px-4 py-3">CVE</th>
-                      <th className="px-4 py-3">Severity</th>
-                      <th className="px-4 py-3">CVSS</th>
-                      <th className="px-4 py-3">Package</th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("component")}
+                          aria-label={`Sort by component. ${getSortLabel("component")}`}
+                        >
+                          <span>Component</span>
+                          {renderSortIcon("component")}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("cve")}
+                          aria-label={`Sort by cve. ${getSortLabel("cve")}`}
+                        >
+                          <span>CVE</span>
+                          {renderSortIcon("cve")}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("severity")}
+                          aria-label={`Sort by severity. ${getSortLabel("severity")}`}
+                        >
+                          <span>Severity</span>
+                          {renderSortIcon("severity")}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("cvss")}
+                          aria-label={`Sort by cvss. ${getSortLabel("cvss")}`}
+                        >
+                          <span>CVSS</span>
+                          {renderSortIcon("cvss")}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("pkg")}
+                          aria-label={`Sort by package. ${getSortLabel("pkg")}`}
+                        >
+                          <span>Package</span>
+                          {renderSortIcon("pkg")}
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -307,7 +432,16 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                     {visibleRows.map((row, index) => (
                       <tr key={`${row.cve}-${row.component}-${row.pkg}-${row.packageVersion ?? "na"}-${index}`} className="border-t border-slate-100 align-top">
                         <td className="px-4 py-3 font-medium text-slate-800">{row.component}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{row.cve}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          <a
+                            href={getVulnerabilityReferenceUrl(row.cve)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
+                          >
+                            {row.cve}
+                          </a>
+                        </td>
                         <td className="px-4 py-3"><SeverityChip value={row.severity} /></td>
                         <td className="px-4 py-3 text-slate-700">{row.cvss.toFixed(1)}</td>
                         <td className="px-4 py-3 text-slate-700">

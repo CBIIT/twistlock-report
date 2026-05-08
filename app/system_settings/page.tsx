@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSessionAuth } from "@/lib/useSessionAuth";
+import { useIamPermissions } from "@/lib/useIamPermissions";
 
 type ComponentRecord = {
   id: number;
@@ -33,6 +34,7 @@ function formatTimestamp(value: string): string {
 
 export default function AdminPage() {
   const { isChecking, isAuthenticated } = useSessionAuth("/");
+  const { canCreate, canUpdate, canDelete, isLoading: isIamLoading } = useIamPermissions("system_settings");
   const [rows, setRows] = useState<ComponentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +104,8 @@ export default function AdminPage() {
   if (isChecking || !isAuthenticated) {
     return null;
   }
+
+  const isReadOnly = !isIamLoading && !canCreate && !canUpdate && !canDelete;
 
   function beginEdit(row: ComponentRecord) {
     setSavingError(null);
@@ -202,7 +206,14 @@ export default function AdminPage() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#e0f2fe_0%,#f8fafc_30%,#ffffff_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_24px_80px_-52px_rgba(15,23,42,0.45)]">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">System Settings</h1>
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">System Settings</h1>
+            {isReadOnly ? (
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+                Read-only
+              </span>
+            ) : null}
+          </div>
           <p className="mt-3 text-sm text-slate-600">
             Manage component records from the database. You can add new records and edit existing rows inline.
           </p>
@@ -249,6 +260,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {canCreate ? (
                   <tr className="border-t border-slate-100 bg-sky-50/50 align-top">
                     <td className="px-4 py-3 text-slate-500">new</td>
                     <td className="px-4 py-3">
@@ -282,6 +294,7 @@ export default function AdminPage() {
                       </Button>
                     </td>
                   </tr>
+                  ) : null}
 
                   {isLoading ? (
                     <tr>
@@ -356,18 +369,25 @@ export default function AdminPage() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
-                              <Button type="button" variant="outline" size="sm" onClick={() => beginEdit(row)} disabled={isBusy}>
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDelete(row.id)}
-                                disabled={isBusy}
-                              >
-                                {isDeletingThisRow ? "Deleting..." : "Delete"}
-                              </Button>
+                              {canUpdate ? (
+                                <Button type="button" variant="outline" size="sm" onClick={() => beginEdit(row)} disabled={isBusy}>
+                                  Edit
+                                </Button>
+                              ) : null}
+                              {canDelete ? (
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDelete(row.id)}
+                                  disabled={isBusy}
+                                >
+                                  {isDeletingThisRow ? "Deleting..." : "Delete"}
+                                </Button>
+                              ) : null}
+                              {!canUpdate && !canDelete ? (
+                                <span className="text-xs text-slate-400">—</span>
+                              ) : null}
                             </div>
                           )}
                         </td>
