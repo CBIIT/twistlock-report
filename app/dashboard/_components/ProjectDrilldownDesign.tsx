@@ -111,6 +111,18 @@ function cardTone(severity: Severity) {
   }
 }
 
+function isCveIdentifier(value: string): boolean {
+  return value.trim().toUpperCase().startsWith("CVE");
+}
+
+function getVulnerabilityReferenceUrl(value: string): string {
+  const trimmed = value.trim();
+  if (isCveIdentifier(trimmed)) {
+    return `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(trimmed)}`;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+}
+
 export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: string }) {
   type VulnerabilitySortKey = "component" | "cve" | "severity" | "cvss" | "pkg";
   type SortDirection = "asc" | "desc";
@@ -420,7 +432,16 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                     {visibleRows.map((row, index) => (
                       <tr key={`${row.cve}-${row.component}-${row.pkg}-${row.packageVersion ?? "na"}-${index}`} className="border-t border-slate-100 align-top">
                         <td className="px-4 py-3 font-medium text-slate-800">{row.component}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{row.cve}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          <a
+                            href={getVulnerabilityReferenceUrl(row.cve)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900"
+                          >
+                            {row.cve}
+                          </a>
+                        </td>
                         <td className="px-4 py-3"><SeverityChip value={row.severity} /></td>
                         <td className="px-4 py-3 text-slate-700">{row.cvss.toFixed(1)}</td>
                         <td className="px-4 py-3 text-slate-700">
