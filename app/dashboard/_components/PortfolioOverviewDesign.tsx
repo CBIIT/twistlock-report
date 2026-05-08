@@ -39,7 +39,7 @@ function Sparkline({ values }: { values: number[] }) {
 export default function PortfolioOverviewDesign() {
   const [sortBy, setSortBy] = useState<SortKey>("critical");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [hasIssuesOnly, setHasIssuesOnly] = useState(true);
+  const hasIssuesOnly = true;
   const { data, isLoading, error, reload } = usePortfolioData({ sortBy, hasIssuesOnly });
 
   const projects = useMemo(() => {
@@ -94,28 +94,15 @@ export default function PortfolioOverviewDesign() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Twistlock Production site vulnerability dashboard</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Production Site Vulnerability Risk Overview</h1>
             </div>
-            <div className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-900">
+            <div className="text-sm font-semibold text-slate-700">
               Week: {data?.week ?? "-"}
             </div>
           </div>
         </header>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_18px_56px_-40px_rgba(15,23,42,0.45)]">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
             <h2 className="text-xl font-semibold text-slate-950">Portfolio Dashboard</h2>
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <button
-                type="button"
-                onClick={() => setHasIssuesOnly((v) => !v)}
-                className={
-                  hasIssuesOnly
-                    ? "inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 font-medium text-emerald-900 transition"
-                    : "inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-medium text-slate-700 transition"
-                }
-              >
-                {hasIssuesOnly ? "Has issues" : "All projects"}
-              </button>
-            </div>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200">
