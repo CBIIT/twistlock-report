@@ -133,7 +133,7 @@ export async function searchByProject(
 	const url =
 		`${getBaseUrl()}/api/v1/registry` +
 		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
-		`&project=Central+Console&reverse=true&search=${search}&sort=scanTime&limit=250`;
+		`&project=Central+Console&search=${search}&sort=scanTime&limit=250`;
 
 	const res = await fetch(url, { headers: authHeader(token) });
 
