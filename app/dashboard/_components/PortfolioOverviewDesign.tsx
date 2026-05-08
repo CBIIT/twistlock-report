@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePortfolioData, type SortKey } from "@/app/dashboard/_hooks/useDashboardApi";
+
+type SortDirection = "asc" | "desc";
 
 function formatProjectName(project: string) {
   return project.toUpperCase();
@@ -36,10 +38,52 @@ function Sparkline({ values }: { values: number[] }) {
 
 export default function PortfolioOverviewDesign() {
   const [sortBy, setSortBy] = useState<SortKey>("critical");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [hasIssuesOnly, setHasIssuesOnly] = useState(true);
   const { data, isLoading, error, reload } = usePortfolioData({ sortBy, hasIssuesOnly });
 
-  const projects = data?.projects ?? [];
+  const projects = useMemo(() => {
+    const rows = [...(data?.projects ?? [])];
+
+    rows.sort((a, b) => {
+      const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+      if (sortBy === "project") {
+        return a.project.localeCompare(b.project) * directionMultiplier;
+      }
+      return (a[sortBy] - b[sortBy]) * directionMultiplier;
+    });
+
+    return rows;
+  }, [data?.projects, sortBy, sortDirection]);
+
+  function handleSort(nextKey: SortKey) {
+    if (nextKey === sortBy) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortBy(nextKey);
+    setSortDirection(nextKey === "project" ? "asc" : "desc");
+  }
+
+  function getSortLabel(key: SortKey) {
+    if (sortBy !== key) {
+      return "Sort";
+    }
+    return sortDirection === "asc" ? "Sorted asc" : "Sorted desc";
+  }
+
+  function renderSortIcon(key: SortKey) {
+    if (sortBy !== key) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />;
+    }
+
+    if (sortDirection === "asc") {
+      return <ArrowUp className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
+    }
+
+    return <ArrowDown className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />;
+  }
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,#e0f2fe_0%,#f8fafc_28%,#ffffff_65%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -60,23 +104,6 @@ export default function PortfolioOverviewDesign() {
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="text-xl font-semibold text-slate-950">Portfolio Dashboard</h2>
             <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-medium text-slate-700">
-                Sort by
-                <select
-                  className="bg-transparent text-slate-900 outline-none"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortKey)}
-                  aria-label="Sort projects"
-                >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                  <option value="project">Project</option>
-                </select>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-              </label>
-
               <button
                 type="button"
                 onClick={() => setHasIssuesOnly((v) => !v)}
@@ -96,11 +123,61 @@ export default function PortfolioOverviewDesign() {
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Project</th>
-                    <th className="px-4 py-3">Critical</th>
-                    <th className="px-4 py-3">High</th>
-                    <th className="px-4 py-3">Medium</th>
-                    <th className="px-4 py-3">Low</th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("project")}
+                        aria-label={`Sort by project. ${getSortLabel("project")}`}
+                      >
+                        <span>Project</span>
+                        {renderSortIcon("project")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("critical")}
+                        aria-label={`Sort by critical. ${getSortLabel("critical")}`}
+                      >
+                        <span>Critical</span>
+                        {renderSortIcon("critical")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("high")}
+                        aria-label={`Sort by high. ${getSortLabel("high")}`}
+                      >
+                        <span>High</span>
+                        {renderSortIcon("high")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("medium")}
+                        aria-label={`Sort by medium. ${getSortLabel("medium")}`}
+                      >
+                        <span>Medium</span>
+                        {renderSortIcon("medium")}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                        onClick={() => handleSort("low")}
+                        aria-label={`Sort by low. ${getSortLabel("low")}`}
+                      >
+                        <span>Low</span>
+                        {renderSortIcon("low")}
+                      </button>
+                    </th>
                     <th className="px-4 py-3">Trend (8w)</th>
                     <th className="px-4 py-3">Action</th>
                   </tr>
