@@ -10,7 +10,7 @@ export default function Home() {
   function handleLogin(newToken: string, username: string) {
     sessionStorage.setItem("twistlockToken", newToken);
     sessionStorage.setItem("twistlockUsername", username);
-    router.push("/report");
+    router.push("/dashboard");
   }
 
   return (
