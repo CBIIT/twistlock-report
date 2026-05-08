@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { loginFormSchema, type LoginFormValues } from "@/lib/validators";
 
 interface LoginFormProps {
-	onLogin: (token: string) => void;
+	onLogin: (token: string, username: string) => void;
 	expiredMessage?: string;
 }
 
@@ -51,7 +51,7 @@ export default function LoginForm({ onLogin, expiredMessage }: LoginFormProps) {
 			}
 
 			const data = (await response.json()) as { token: string };
-			onLogin(data.token);
+			onLogin(data.token, values.username);
 		} catch {
 			setError("Network error. Please check your connection and try again.");
 		} finally {

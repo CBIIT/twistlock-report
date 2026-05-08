@@ -7,8 +7,9 @@ import LoginForm from "@/components/LoginForm";
 export default function Home() {
   const router = useRouter();
 
-  function handleLogin(newToken: string) {
+  function handleLogin(newToken: string, username: string) {
     sessionStorage.setItem("twistlockToken", newToken);
+    sessionStorage.setItem("twistlockUsername", username);
     router.push("/report");
   }
 
