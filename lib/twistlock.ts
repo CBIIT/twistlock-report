@@ -64,6 +64,7 @@ export async function resolveRegistry(
 		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
 		`&project=Central+Console&reverse=true&search=${search}&sort=vulnerabilityRiskScore`;
 
+	console.log(`Resolving registry from Twistlock API ${url}`);
 	const res = await fetch(url, { headers: authHeader(token) });
 
 	if (res.status === 401) {
@@ -91,11 +92,17 @@ export async function getScanResult(
 	imageTag: string,
 	token: string
 ): Promise<TwistlockScanResult> {
+	// const url =
+	// 	`${getBaseUrl()}/api/v34.03/registry` +
+	// 	`?registry=${encodeURIComponent(registry)}` +
+	// 	`&repository=${encodeURIComponent(imageName)}` +
+	// 	`&tag=${encodeURIComponent(imageTag)}&sort=scanTime`;
+
 	const url =
 		`${getBaseUrl()}/api/v34.03/registry` +
 		`?registry=${encodeURIComponent(registry)}` +
-		`&repository=${encodeURIComponent(imageName)}` +
-		`&tag=${encodeURIComponent(imageTag)}`;
+		`&search=${encodeURIComponent(imageName)}:${encodeURIComponent(imageTag)}`;
+
 
 	console.log(`Fetching scan result from Twistlock from API ${url}`);
 	const res = await fetch(url, { headers: authHeader(token) });
@@ -134,6 +141,8 @@ export async function searchByProject(
 		`${getBaseUrl()}/api/v1/registry` +
 		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
 		`&project=Central+Console&search=${search}&sort=scanTime&limit=250`;
+	
+		console.log(`Searching Twistlock for project "${projectName}" with API ${url}`);
 
 	const res = await fetch(url, { headers: authHeader(token) });
 
