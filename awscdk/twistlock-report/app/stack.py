@@ -21,6 +21,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_efs as efs
 from aws_cdk import Duration
 from aws_cdk import RemovalPolicy
+from rds import RdsInstance
 from services import frontend
 import aws_cdk as cdk
 
