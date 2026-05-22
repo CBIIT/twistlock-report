@@ -31,11 +31,16 @@ class frontendService:
         }
 
     secrets={
-            "POSTGRES_USER":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_user", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'username'),
-            "POSTGRES_PASSWORD":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_password", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'password'),
-            "POSTGRES_HOST":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_host", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'host'),
-            "POSTGRES_PORT":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_port", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'port'),
-            "POSTGRES_DB":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_db", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'dbname'),
+            #"POSTGRES_USER":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_user", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'username'),
+            "POSTGRES_USER":ecs.Secret.from_secrets_manager(self.secret, 'rds_username'),
+            #"POSTGRES_PASSWORD":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_password", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'password'),
+            "POSTGRES_PASSWORD":ecs.Secret.from_secrets_manager(self.secret, 'rds_password'),
+            #"POSTGRES_HOST":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_host", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'host'),
+            "POSTGRES_HOST":ecs.Secret.from_secrets_manager(self.secret, 'rds_endpoint'),
+            #"POSTGRES_PORT":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_port", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'port'),
+            "POSTGRES_PORT":ecs.Secret.from_secrets_manager(self.secret, 'rds_port'),
+            #"POSTGRES_DB":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "postgres_db", secret_name='ccdi-dcc/vuln-ingest/rds-credentials'),'dbname'),
+            "POSTGRES_DB":ecs.Secret.from_secrets_manager(self.secret, 'rds_db_name')
 
             #"NEW_RELIC_LICENSE_KEY":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_newrelic", secret_name='monitoring/newrelic'), 'api_key'),
             #"REACT_APP_NIH_CLIENT_ID":ecs.Secret.from_secrets_manager(secretsmanager.Secret.from_secret_name_v2(self, "fe_provider_id", secret_name='auth/provider/nih'), 'nih_client_id'),
