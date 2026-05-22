@@ -28,11 +28,15 @@ class RdsInstance(Construct):
             allow_all_outbound=True,
         )
 
-        self.rds_sg.add_ingress_rule(
-            peer=ec2.Peer.ipv4(vpc.vpc_cidr_block),
-            connection=ec2.Port.tcp(5432),
-            description="Allow PostgreSQL access from within VPC"
-        )
+        # Define all allowed IP ranges read from config.ini
+        allowed_cidrs = [cidr.strip() for cidr in config['db']['allowed_cidrs'].split(',')]
+
+        for cidr in allowed_cidrs:
+            self.rds_sg.add_ingress_rule(
+                peer=ec2.Peer.ipv4(cidr),
+                connection=ec2.Port.tcp(5432),
+                description="Allow PostgreSQL access"
+            )
 
         # Subnet group — private subnets
         rds_subnet_group = rds.SubnetGroup(
