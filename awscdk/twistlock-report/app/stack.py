@@ -44,6 +44,27 @@ class Stack(Stack):
             vpc_id = config['main']['vpc_id']
         )
 
+        ### RDS - referred to rds.py
+        if config.getboolean('db', 'create_rds', fallback=False):
+            self.rds = RdsInstance(
+              self,
+              f"{self.namingPrefix}-rds",
+              vpc=self.VPC
+            )
+            rds_endpoint = self.rds.rds.db_instance_endpoint_address
+            rds_port     = self.rds.rds.db_instance_endpoint_port
+
+        ### Secrets
+        self.secret = secretsmanager.Secret(self, "Secret",
+            secret_name="{}/{}".format(config['main']['resource_prefix'], config['main']['tier']),
+            secret_object_value={
+                "rds_endpoint": SecretValue.unsafe_plain_text(self.rds.rds.db_instance_endpoint_address),
+                "rds_port":     SecretValue.unsafe_plain_text(self.rds.rds.db_instance_endpoint_port),
+                "rds_db_name":  SecretValue.unsafe_plain_text(config.get('db', 'rds_db_name')),
+                "rds_username": SecretValue.unsafe_plain_text(config.get('db', 'rds_username')),
+                "rds_password": self.rds.rds.secret.secret_value_from_json("password")
+            }
+        )
         
         ### ALB
         # Extract subnet IDs
