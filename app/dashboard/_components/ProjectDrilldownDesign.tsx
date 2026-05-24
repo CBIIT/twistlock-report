@@ -44,6 +44,20 @@ function TrendChart({
   const allValues = trendDetail.flatMap((d) => [d.critical, d.high, d.medium, d.low, 0]);
   const max = Math.max(...allValues) + 4;
   const denominator = Math.max(trendDetail.length - 1, 1);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  function clampIndex(index: number) {
+    if (trendDetail.length === 0) return 0;
+    return Math.max(0, Math.min(trendDetail.length - 1, index));
+  }
+
+  function toX(index: number) {
+    return (index / denominator) * (chartWidth - 20) + 10;
+  }
+
+  function toY(value: number) {
+    return chartHeight - (value / max) * (chartHeight - 20) - 10;
+  }
 
   function toPoints(key: Severity) {
     return trendDetail
@@ -60,13 +74,38 @@ function TrendChart({
       <h3 className="text-lg font-semibold text-slate-950">Vulnerability Trend</h3>
       <p className="mt-1 text-sm text-slate-600">8-week severity movement by selected series</p>
       <div className="mt-5 overflow-x-auto">
-        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-56 min-w-[680px] w-full" aria-label="Vulnerability trend chart">
+        <svg
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          className="h-56 min-w-[680px] w-full"
+          aria-label="Vulnerability trend chart"
+          onMouseMove={(event) => {
+            if (trendDetail.length === 0) return;
+            const svgRect = event.currentTarget.getBoundingClientRect();
+            const relativeX = event.clientX - svgRect.left;
+            const xInViewBox = (relativeX / svgRect.width) * chartWidth;
+            const nextIndex = clampIndex(Math.round(((xInViewBox - 10) / (chartWidth - 20)) * denominator));
+            setHoveredIndex(nextIndex);
+          }}
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
           {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
             const y = chartHeight - tick * (chartHeight - 20) - 10;
             return (
               <line key={tick} x1="0" y1={y} x2={chartWidth} y2={y} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1" />
             );
           })}
+
+          {hoveredIndex !== null ? (
+            <line
+              x1={toX(hoveredIndex)}
+              y1={8}
+              x2={toX(hoveredIndex)}
+              y2={chartHeight - 10}
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+          ) : null}
 
           {(["critical", "high", "medium", "low"] as Severity[]).map((series) =>
             activeSeries.includes(series) ? (
@@ -82,6 +121,25 @@ function TrendChart({
             ) : null
           )}
 
+          {hoveredIndex !== null
+            ? (["critical", "high", "medium", "low"] as Severity[]).map((series) => {
+                if (!activeSeries.includes(series)) return null;
+                const point = trendDetail[hoveredIndex];
+                if (!point) return null;
+                return (
+                  <circle
+                    key={`hover-${series}`}
+                    cx={toX(hoveredIndex)}
+                    cy={toY(point[series])}
+                    r="4"
+                    fill={severityStroke[series]}
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                  />
+                );
+              })
+            : null}
+
           {trendWeeks.map((wk, idx) => {
             const x = (idx / Math.max(trendWeeks.length - 1, 1)) * (chartWidth - 20) + 10;
             return (
@@ -92,6 +150,20 @@ function TrendChart({
           })}
         </svg>
       </div>
+
+      {hoveredIndex !== null && trendDetail[hoveredIndex] ? (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm">
+          <p className="font-semibold text-slate-900">{trendWeeks[hoveredIndex] ?? trendDetail[hoveredIndex].week}</p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {(["critical", "high", "medium", "low"] as Severity[]).map((series) => (
+              <span key={`value-${series}`} className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: severityStroke[series] }} />
+                <span className="uppercase">{series}</span>: {trendDetail[hoveredIndex][series]}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -124,7 +196,7 @@ function getVulnerabilityReferenceUrl(value: string): string {
 }
 
 export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: string }) {
-  type VulnerabilitySortKey = "component" | "cve" | "severity" | "cvss" | "pkg";
+  type VulnerabilitySortKey = "component" | "imageTag" | "cve" | "severity" | "cvss" | "pkg";
   type SortDirection = "asc" | "desc";
 
   const [selectedSeverities, setSelectedSeverities] = useState<Severity[]>(["critical", "high"]);
@@ -343,7 +415,7 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                       setQuery(e.target.value);
                       setPage(1);
                     }}
-                    placeholder="Search CVE, package, component"
+                    placeholder="Search CVE, package, component, or image tag"
                     className="h-9 w-[260px] rounded-full pl-9"
                     aria-label="Search vulnerabilities"
                   />
@@ -365,6 +437,17 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                         >
                           <span>Component</span>
                           {renderSortIcon("component")}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 text-left text-xs uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900"
+                          onClick={() => handleSort("imageTag")}
+                          aria-label={`Sort by image tag. ${getSortLabel("imageTag")}`}
+                        >
+                          <span>Image Tag</span>
+                          {renderSortIcon("imageTag")}
                         </button>
                       </th>
                       <th className="px-4 py-3">
@@ -416,12 +499,12 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-7 text-center text-slate-500">Loading vulnerabilities...</td>
+                        <td colSpan={6} className="px-4 py-7 text-center text-slate-500">Loading vulnerabilities...</td>
                       </tr>
                     ) : null}
                     {!isLoading && error ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-7 text-center">
+                        <td colSpan={6} className="px-4 py-7 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <p className="text-red-600">{error}</p>
                             <Button type="button" variant="outline" size="sm" onClick={reload}>Retry</Button>
@@ -430,8 +513,9 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                       </tr>
                     ) : null}
                     {visibleRows.map((row, index) => (
-                      <tr key={`${row.cve}-${row.component}-${row.pkg}-${row.packageVersion ?? "na"}-${index}`} className="border-t border-slate-100 align-top">
+                      <tr key={`${row.cve}-${row.component}-${row.imageTag}-${row.pkg}-${row.packageVersion ?? "na"}-${index}`} className="border-t border-slate-100 align-top">
                         <td className="px-4 py-3 font-medium text-slate-800">{row.component}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.imageTag}</td>
                         <td className="px-4 py-3 font-semibold text-slate-900">
                           <a
                             href={getVulnerabilityReferenceUrl(row.cve)}
@@ -452,7 +536,7 @@ export default function ProjectDrilldownDesign({ projectSlug }: { projectSlug: s
                     ))}
                     {!isLoading && !error && visibleRows.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-7 text-center text-slate-500">No vulnerabilities match the selected filters.</td>
+                        <td colSpan={6} className="px-4 py-7 text-center text-slate-500">No vulnerabilities match the selected filters.</td>
                       </tr>
                     ) : null}
                   </tbody>

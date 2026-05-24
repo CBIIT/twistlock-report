@@ -13,6 +13,7 @@ export interface RegistrySearchItem {
 export interface TagInfo {
 	tag: string;
 	creationTime: string;
+	scanTime?: string;
 }
 
 export interface ProjectSearchResult {

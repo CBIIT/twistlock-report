@@ -30,6 +30,7 @@ export type TrendPoint = {
 
 export type DrilldownRow = {
   component: string;
+  imageTag: string;
   cve: string;
   severity: Severity;
   cvss: number;

@@ -50,6 +50,7 @@ type DrilldownTrendRow = {
 
 type DrilldownVulnerabilityRow = {
 	component: string;
+	image_tag: string | null;
 	cve_id: string | null;
 	severity: string | null;
 	cvss: string | number | null;
@@ -128,8 +129,9 @@ async function getLatestWeeks(limit: number, project?: string): Promise<string[]
 	const rows = await query<{ week: string }>(`
 		SELECT s.week
 		FROM scans s
-		JOIN components c ON c.id = s.component_id
-		WHERE LOWER(c.project) = LOWER($1)
+		JOIN image_tag_mapping itm ON itm.id = s.component_id
+		JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
+		WHERE LOWER(pim.project) = LOWER($1)
 		GROUP BY s.week
 		ORDER BY s.week DESC
 		LIMIT $2
@@ -169,18 +171,19 @@ export async function getPortfolioPayload(options: {
 			ORDER BY s.component_id, s.scanned_at DESC
 		),
 		unique_vulnerabilities AS (
-			SELECT DISTINCT ON (c.project, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
-				c.project,
-				c.image_name AS component,
+			SELECT DISTINCT ON (pim.project, COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name), COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+				pim.project,
+				COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component,
 				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
 				LOWER(v.severity) AS severity
 			FROM latest_scans ls
-			JOIN components c ON c.id = ls.component_id
+			JOIN image_tag_mapping itm ON itm.id = ls.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			JOIN vulnerabilities v ON v.scan_id = ls.id
 			WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
 			ORDER BY
-				c.project,
-				c.image_name,
+				pim.project,
+				COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name),
 				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
 				CASE LOWER(v.severity)
 					WHEN 'critical' THEN 1
@@ -212,18 +215,19 @@ export async function getPortfolioPayload(options: {
 				ORDER BY s.week, s.component_id, s.scanned_at DESC
 			),
 			unique_vulnerabilities AS (
-				SELECT DISTINCT ON (c.project, lws.week, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
-					c.project,
+				SELECT DISTINCT ON (pim.project, lws.week, COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name), COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+					pim.project,
 					lws.week,
-					c.image_name AS component,
+					COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component,
 					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id
 				FROM latest_week_component_scans lws
-				JOIN components c ON c.id = lws.component_id
+				JOIN image_tag_mapping itm ON itm.id = lws.component_id
+				JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 				JOIN vulnerabilities v ON v.scan_id = lws.id
 				ORDER BY
-					c.project,
+					pim.project,
 					lws.week,
-					c.image_name,
+					COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name),
 					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN')
 			)
 			SELECT
@@ -281,10 +285,10 @@ async function resolveProjectName(projectSlug: string): Promise<string> {
 	}
 
 	const projectRows = await query<ProjectNameRow>(`
-		SELECT c.project
-		FROM components c
-		WHERE LOWER(c.project) = LOWER($1)
-		GROUP BY c.project
+		SELECT pim.project
+		FROM project_image_mapping pim
+		WHERE LOWER(pim.project) = LOWER($1)
+		GROUP BY pim.project
 		LIMIT 1
 	`, [decoded]);
 
@@ -314,6 +318,7 @@ export async function getDrilldownPayload(options: {
 	filters: { components: string[]; fixStatuses: FixStatus[] };
 	rows: Array<{
 		component: string;
+		imageTag: string;
 		cve: string;
 		severity: Severity;
 		cvss: number;
@@ -341,22 +346,24 @@ export async function getDrilldownPayload(options: {
 				s.id,
 				s.component_id
 			FROM scans s
-			JOIN components c ON c.id = s.component_id
+			JOIN image_tag_mapping itm ON itm.id = s.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			WHERE s.week = $1
-				AND LOWER(c.project) = LOWER($2)
+				AND LOWER(pim.project) = LOWER($2)
 			ORDER BY s.component_id, s.scanned_at DESC
 		),
 		unique_vulnerabilities AS (
-			SELECT DISTINCT ON (c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
-				c.image_name AS component,
+			SELECT DISTINCT ON (COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name), COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+				COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component,
 				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
 				LOWER(v.severity) AS severity
 			FROM latest_scans ls
-			JOIN components c ON c.id = ls.component_id
+			JOIN image_tag_mapping itm ON itm.id = ls.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			JOIN vulnerabilities v ON v.scan_id = ls.id
 			WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
 			ORDER BY
-				c.image_name,
+				COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name),
 				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
 				CASE LOWER(v.severity)
 					WHEN 'critical' THEN 1
@@ -390,24 +397,26 @@ export async function getDrilldownPayload(options: {
 					s.week,
 					s.component_id
 				FROM scans s
-				JOIN components c ON c.id = s.component_id
+				JOIN image_tag_mapping itm ON itm.id = s.component_id
+				JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 				WHERE s.week = ANY($1::text[])
-					AND LOWER(c.project) = LOWER($2)
+					AND LOWER(pim.project) = LOWER($2)
 				ORDER BY s.week, s.component_id, s.scanned_at DESC
 			),
 			unique_vulnerabilities AS (
-				SELECT DISTINCT ON (ls.week, c.image_name, COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
+				SELECT DISTINCT ON (ls.week, COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name), COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'))
 					ls.week,
-					c.image_name AS component,
+					COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component,
 					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
 					LOWER(v.severity) AS severity
 				FROM latest_scans ls
-				JOIN components c ON c.id = ls.component_id
+				JOIN image_tag_mapping itm ON itm.id = ls.component_id
+				JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 				JOIN vulnerabilities v ON v.scan_id = ls.id
 				WHERE LOWER(v.severity) IN ('critical', 'high', 'medium', 'low')
 				ORDER BY
 					ls.week,
-					c.image_name,
+					COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name),
 					COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN'),
 					CASE LOWER(v.severity)
 						WHEN 'critical' THEN 1
@@ -451,14 +460,16 @@ export async function getDrilldownPayload(options: {
 				s.id,
 				s.component_id
 			FROM scans s
-			JOIN components c ON c.id = s.component_id
+			JOIN image_tag_mapping itm ON itm.id = s.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			WHERE s.week = $1
-				AND LOWER(c.project) = LOWER($2)
+				AND LOWER(pim.project) = LOWER($2)
 			ORDER BY s.component_id, s.scanned_at DESC
 		),
 		base AS (
 			SELECT
-				c.image_name AS component,
+				COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component,
+				COALESCE(NULLIF(BTRIM(itm.current_tag), ''), 'UNKNOWN') AS image_tag,
 				COALESCE(NULLIF(BTRIM(v.cve_id), ''), 'UNKNOWN') AS cve_id,
 				LOWER(v.severity) AS severity,
 				v.cvss,
@@ -471,7 +482,8 @@ export async function getDrilldownPayload(options: {
 					ELSE 'none'
 				END AS fix_status
 			FROM latest_scans ls
-			JOIN components c ON c.id = ls.component_id
+			JOIN image_tag_mapping itm ON itm.id = ls.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			JOIN vulnerabilities v ON v.scan_id = ls.id
 		),
 		filtered AS (
@@ -485,11 +497,13 @@ export async function getDrilldownPayload(options: {
 					OR LOWER(COALESCE(cve_id, '')) LIKE '%' || LOWER($6) || '%'
 					OR LOWER(COALESCE(package_name, '')) LIKE '%' || LOWER($6) || '%'
 					OR LOWER(component) LIKE '%' || LOWER($6) || '%'
+					OR LOWER(COALESCE(image_tag, '')) LIKE '%' || LOWER($6) || '%'
 				)
 		),
 		deduped AS (
-			SELECT DISTINCT ON (component, cve_id)
+			SELECT DISTINCT ON (component, image_tag, cve_id)
 				component,
+				image_tag,
 				cve_id,
 				severity,
 				cvss,
@@ -499,6 +513,7 @@ export async function getDrilldownPayload(options: {
 			FROM filtered
 			ORDER BY
 				component,
+				image_tag,
 				cve_id,
 				CASE severity
 					WHEN 'critical' THEN 1
@@ -515,7 +530,7 @@ export async function getDrilldownPayload(options: {
 
 	const vulnerabilityRows = await query<DrilldownVulnerabilityRow>(
 		`${vulnerabilitySql}
-		SELECT component, cve_id, severity, cvss, package_name, package_version, fix_status
+		SELECT component, image_tag, cve_id, severity, cvss, package_name, package_version, fix_status
 		FROM deduped
 		ORDER BY
 			CASE severity
@@ -543,15 +558,17 @@ export async function getDrilldownPayload(options: {
 				s.id,
 				s.component_id
 			FROM scans s
-			JOIN components c ON c.id = s.component_id
+			JOIN image_tag_mapping itm ON itm.id = s.component_id
+			JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
 			WHERE s.week = $1
-				AND LOWER(c.project) = LOWER($2)
+				AND LOWER(pim.project) = LOWER($2)
 			ORDER BY s.component_id, s.scanned_at DESC
 		)
-		SELECT c.image_name AS component
+		SELECT COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name) AS component
 		FROM latest_scans ls
-		JOIN components c ON c.id = ls.component_id
-		ORDER BY c.image_name
+		JOIN image_tag_mapping itm ON itm.id = ls.component_id
+		JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
+		ORDER BY COALESCE(NULLIF(BTRIM(itm.image_name), ''), pim.image_name)
 	`, [week, project]);
 
 	const rows = vulnerabilityRows
@@ -562,6 +579,7 @@ export async function getDrilldownPayload(options: {
 			}
 			return {
 				component: row.component,
+				imageTag: row.image_tag ?? "UNKNOWN",
 				cve: row.cve_id ?? "UNKNOWN",
 				severity: severity as Severity,
 				cvss: toNumber(row.cvss),

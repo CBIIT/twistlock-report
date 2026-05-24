@@ -1,7 +1,7 @@
 # System Design — Twistlock Container Scan Report Generator
 
-**Version:** 2.0  
-**Date:** March 24, 2026  
+**Version:** 2.1  
+**Date:** May 24, 2026  
 **Status:** Current
 
 ---
@@ -21,6 +21,7 @@
 11. [Environment Configuration](#11-environment-configuration)
 12. [Error Handling Strategy](#12-error-handling-strategy)
 13. [Future Enhancements](#13-future-enhancements)
+14. [Data Model Update — Mapping Tables](#14-data-model-update--mapping-tables)
 
 ---
 
@@ -69,7 +70,7 @@ Users authenticate with their Twistlock (Prisma Cloud) username and password. Th
 **Key architectural decisions:**
 
 - **No separate backend service.** Next.js API Routes (serverless functions on Vercel) proxy all Twistlock requests server-side. Credentials and tokens never reach the browser beyond React state.
-- **No database.** The application is stateless. Reports are generated on demand and streamed directly to the client. Nothing is stored.
+- **Hybrid persistence model.** Report generation remains stateless, while dashboard and system settings use PostgreSQL mapping tables (`project_image_mapping`, `image_tag_mapping`, scan/vulnerability tables) for scan analytics and image-tag administration.
 - **Client-side token management.** The access token obtained from `/api/auth/login` is held in React component state — not in cookies, localStorage, or sessionStorage. It disappears on page refresh or tab close.
 - **Batch report generation.** Multiple repositories are combined into a single `.docx` in one request, avoiding sequential downloads.
 
@@ -863,6 +864,43 @@ HTTP 401 responses in `ReportForm` trigger `onSessionExpired()` to redirect to l
 ---
 
 ## 13. Future Enhancements
+
+## 14. Data Model Update — Mapping Tables
+
+### 14.1 Summary
+
+The dashboard drilldown and system settings flows no longer depend on the legacy `components` table.
+They now use:
+
+- `project_image_mapping` — canonical `(project, image_name)` rows
+- `image_tag_mapping` — tag rows linked to `project_image_mapping` via `project_image_mapping_id`
+
+This aligns the UI with the migrated schema in [db/schema_change.sql](db/schema_change.sql), where scan component references are backed by image-tag mapping IDs.
+
+### 14.2 Backend Changes
+
+- Updated [lib/components-api.ts](lib/components-api.ts) to read/write via mapping tables:
+  - `listComponents()` now returns one current row per `(project, image_name)` using ranked mapping rows.
+  - `createComponent()` now upserts into `project_image_mapping`, demotes old production tags, and creates/upserts a production row in `image_tag_mapping`.
+  - `updateComponent()` now rebinds the tag row to the target project/image mapping and enforces a single production row for that mapping.
+  - `deleteComponent()` now deletes from `image_tag_mapping`, promotes the latest remaining tag when available, and removes orphaned `project_image_mapping` rows.
+
+- Updated drilldown queries in [lib/dashboard-api.ts](lib/dashboard-api.ts):
+  - Replaced `components` joins with `scans -> image_tag_mapping -> project_image_mapping`.
+  - Project resolution now uses `project_image_mapping`.
+  - Component labels now use mapped image names from `image_tag_mapping`/`project_image_mapping`.
+
+### 14.3 API and UI Impact
+
+- Existing API routes remained stable (`/api/components`, `/api/components/[id]`) so no frontend contract change was required.
+- [app/system_settings/page.tsx](app/system_settings/page.tsx) copy was updated to reflect mapping-based data management.
+- Drilldown route shape is unchanged (`/api/dashboard/drilldown/[project]`), but data source joins now align to mapping tables.
+
+### 14.4 Operational Notes
+
+- The system settings page continues to expose a single `currentTag` per project-image row from the current production mapping.
+- Historical tags remain representable in `image_tag_mapping`; the production selector is controlled by `is_prod`.
+- This preserves compatibility with existing frontend DTOs while moving persistence off the deprecated table.
 
 - **Token expiry detection via JWT decode.** Parse the JWT `exp` claim client-side to proactively warn the user before the token expires, rather than waiting for a 401.
 - **Session persistence.** Optionally store the token in an encrypted HTTP-only cookie to survive page reloads (requires careful CSRF protection).
