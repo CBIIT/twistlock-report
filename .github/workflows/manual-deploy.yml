@@ -12,6 +12,7 @@ on:
         type: choice
         options:
           - dev
+          - prod
       app_image:
       cdk_command:
         description: 'Which CDK Command To Run'
@@ -41,7 +42,7 @@ jobs:
     - name: Set up Node
       uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7     # v3.8.2
       with:
-        node-version: "22"
+        node-version: "26"
  
     - name: Install Python dependencies and CDK
       run: |
