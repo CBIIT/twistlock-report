@@ -23,7 +23,7 @@ on:
         required: true
         type: boolean
         default: true
-run-name: "Build Docker Images and Deploy General Commons"
+run-name: "Build Docker Images for twistlock report"
 
 jobs:
 
