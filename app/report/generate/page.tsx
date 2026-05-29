@@ -1,10 +1,19 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReportForm from "@/components/ReportForm";
 import { useSessionAuth } from "@/lib/useSessionAuth";
 
 export default function GenerateReportPage() {
+	return (
+		<Suspense fallback={null}>
+			<GenerateReportContent />
+		</Suspense>
+	);
+}
+
+function GenerateReportContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const { token, isChecking, isAuthenticated } = useSessionAuth("/");

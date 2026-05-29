@@ -1,10 +1,19 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReportForm from "@/components/ReportForm";
 import { useSessionAuth } from "@/lib/useSessionAuth";
 
 export default function FindRepositoryPage() {
+	return (
+		<Suspense fallback={null}>
+			<FindRepositoryContent />
+		</Suspense>
+	);
+}
+
+function FindRepositoryContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const { token, isChecking, isAuthenticated } = useSessionAuth("/");
