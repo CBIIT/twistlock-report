@@ -2,4 +2,4 @@ Notes: Service Versions
 project: twistlock-report
 services:
   frontend:
-    version: 1.0.0.6
+    version: hot-fix.1
