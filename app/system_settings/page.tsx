@@ -12,6 +12,7 @@ type ComponentRecord = {
   project: string;
   imageName: string;
   currentTag: string;
+  isProd: boolean;
   createdAt: string;
 };
 
@@ -19,15 +20,18 @@ type ComponentForm = {
   project: string;
   imageName: string;
   currentTag: string;
+  isProd: boolean;
 };
 
 type SortKey = "id" | "project" | "imageName" | "currentTag" | "createdAt";
 type SortDirection = "asc" | "desc";
+type ProdFilter = "all" | "prod" | "non-prod";
 
 const emptyForm: ComponentForm = {
   project: "",
   imageName: "",
   currentTag: "",
+  isProd: true,
 };
 
 function formatTimestamp(value: string): string {
@@ -42,7 +46,7 @@ export default function AdminPage() {
   const [rows, setRows] = useState<ComponentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [savingError, setSavingError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
 
   const [newForm, setNewForm] = useState<ComponentForm>(emptyForm);
   const [isAdding, setIsAdding] = useState(false);
@@ -53,6 +57,7 @@ export default function AdminPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const [projectFilter, setProjectFilter] = useState("all");
+  const [prodFilter, setProdFilter] = useState<ProdFilter>("all");
   const [searchText, setSearchText] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("id");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -83,6 +88,16 @@ export default function AdminPage() {
     loadComponents();
   }, [loadComponents]);
 
+  useEffect(() => {
+    if (!actionNotice) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setActionNotice(null);
+    }, 4500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [actionNotice]);
+
   const sortedRows = useMemo(() => {
     const directionMultiplier = sortDirection === "asc" ? 1 : -1;
 
@@ -108,6 +123,13 @@ export default function AdminPage() {
     return sortedRows.filter((row) => {
       const projectMatch = projectFilter === "all" || row.project === projectFilter;
       if (!projectMatch) return false;
+
+      const prodMatch =
+        prodFilter === "all" ||
+        (prodFilter === "prod" && row.isProd) ||
+        (prodFilter === "non-prod" && !row.isProd);
+      if (!prodMatch) return false;
+
       if (!query) return true;
 
       return (
@@ -117,7 +139,7 @@ export default function AdminPage() {
         String(row.id).includes(query)
       );
     });
-  }, [projectFilter, searchText, sortedRows]);
+  }, [prodFilter, projectFilter, searchText, sortedRows]);
 
   if (isChecking || !isAuthenticated) {
     return null;
@@ -156,12 +178,13 @@ export default function AdminPage() {
   }
 
   function beginEdit(row: ComponentRecord) {
-    setSavingError(null);
+    setActionNotice(null);
     setEditingId(row.id);
     setEditForm({
       project: row.project,
       imageName: row.imageName,
       currentTag: row.currentTag,
+      isProd: row.isProd,
     });
   }
 
@@ -171,7 +194,7 @@ export default function AdminPage() {
   }
 
   async function handleAdd() {
-    setSavingError(null);
+    setActionNotice(null);
 
     try {
       setIsAdding(true);
@@ -189,15 +212,22 @@ export default function AdminPage() {
       const payload = (await response.json()) as { component: ComponentRecord };
       setRows((prev) => [payload.component, ...prev]);
       setNewForm(emptyForm);
+      setActionNotice({
+        tone: "success",
+        message: `Added mapping ${payload.component.project} / ${payload.component.imageName}:${payload.component.currentTag} (${payload.component.isProd ? "Prod" : "Non-prod"}).`,
+      });
     } catch (err) {
-      setSavingError(err instanceof Error ? err.message : "Failed to add component.");
+      setActionNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Failed to add component.",
+      });
     } finally {
       setIsAdding(false);
     }
   }
 
   async function handleSaveEdit(id: number) {
-    setSavingError(null);
+    setActionNotice(null);
 
     try {
       setIsSavingEdit(true);
@@ -215,15 +245,24 @@ export default function AdminPage() {
       const payload = (await response.json()) as { component: ComponentRecord };
       setRows((prev) => prev.map((row) => (row.id === id ? payload.component : row)));
       cancelEdit();
+      setActionNotice({
+        tone: "success",
+        message: `Updated mapping ${payload.component.project} / ${payload.component.imageName}:${payload.component.currentTag} (${payload.component.isProd ? "Prod" : "Non-prod"}).`,
+      });
     } catch (err) {
-      setSavingError(err instanceof Error ? err.message : "Failed to update component.");
+      setActionNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Failed to update component.",
+      });
     } finally {
       setIsSavingEdit(false);
     }
   }
 
   async function handleDelete(id: number) {
-    setSavingError(null);
+    setActionNotice(null);
+
+    const targetRow = rows.find((row) => row.id === id);
 
     const confirmed = window.confirm(`Delete component #${id}? This action cannot be undone.`);
     if (!confirmed) return;
@@ -243,8 +282,17 @@ export default function AdminPage() {
       if (editingId === id) {
         cancelEdit();
       }
+      setActionNotice({
+        tone: "success",
+        message: targetRow
+          ? `Deleted mapping ${targetRow.project} / ${targetRow.imageName}:${targetRow.currentTag}.`
+          : `Deleted mapping #${id}.`,
+      });
     } catch (err) {
-      setSavingError(err instanceof Error ? err.message : "Failed to delete component.");
+      setActionNotice({
+        tone: "error",
+        message: err instanceof Error ? err.message : "Failed to delete component.",
+      });
     } finally {
       setDeletingId(null);
     }
@@ -263,24 +311,39 @@ export default function AdminPage() {
             ) : null}
           </div>
           <p className="mt-3 text-sm text-slate-600">
-            Manage component records from the database. You can add new records and edit existing rows inline.
+            Manage production image/tag mappings. Data is backed by project/image and image/tag mapping tables.
           </p>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-700">Project:</label>
-              <select
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-              >
-                <option value="all">All</option>
-                {projectOptions.map((project) => (
-                  <option key={project} value={project}>
-                    {project}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-slate-700">Project:</label>
+                <select
+                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                  value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)}
+                >
+                  <option value="all">All</option>
+                  {projectOptions.map((project) => (
+                    <option key={project} value={project}>
+                      {project}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-slate-700">Status:</label>
+                <select
+                  className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                  value={prodFilter}
+                  onChange={(e) => setProdFilter(e.target.value as ProdFilter)}
+                >
+                  <option value="all">All</option>
+                  <option value="prod">Prod</option>
+                  <option value="non-prod">Non-prod</option>
+                </select>
+              </div>
             </div>
 
             <Input
@@ -291,12 +354,24 @@ export default function AdminPage() {
             />
           </div>
 
-          {savingError ? <p className="mt-4 text-sm text-red-600">{savingError}</p> : null}
+          {actionNotice ? (
+            <p
+              className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+                actionNotice.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-red-200 bg-red-50 text-red-600"
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {actionNotice.message}
+            </p>
+          ) : null}
           {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-sm">
+              <table className="w-full min-w-[1040px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-600">
                   <tr>
                     <th className="px-4 py-3">
@@ -343,6 +418,7 @@ export default function AdminPage() {
                         {renderSortIcon("currentTag")}
                       </button>
                     </th>
+                    <th className="px-4 py-3">Prod Status</th>
                     <th className="px-4 py-3">
                       <button
                         type="button"
@@ -385,6 +461,17 @@ export default function AdminPage() {
                         disabled={isBusy}
                       />
                     </td>
+                    <td className="px-4 py-3">
+                      <select
+                        className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                        value={newForm.isProd ? "prod" : "non-prod"}
+                        onChange={(e) => setNewForm((prev) => ({ ...prev, isProd: e.target.value === "prod" }))}
+                        disabled={isBusy}
+                      >
+                        <option value="prod">Prod</option>
+                        <option value="non-prod">Non-prod</option>
+                      </select>
+                    </td>
                     <td className="px-4 py-3 text-slate-500">auto</td>
                     <td className="px-4 py-3">
                       <Button type="button" variant="outline" size="sm" onClick={handleAdd} disabled={isBusy}>
@@ -396,14 +483,14 @@ export default function AdminPage() {
 
                   {isLoading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">Loading components...</td>
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">Loading mappings...</td>
                     </tr>
                   ) : null}
 
                   {!isLoading && filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                        No components match the current filter/search.
+                      <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        No mappings match the current filter/search.
                       </td>
                     </tr>
                   ) : null}
@@ -446,6 +533,29 @@ export default function AdminPage() {
                             />
                           ) : (
                             <span className="text-slate-900">{row.currentTag}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {isEditing ? (
+                            <select
+                              className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                              value={editForm.isProd ? "prod" : "non-prod"}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, isProd: e.target.value === "prod" }))}
+                              disabled={isBusy}
+                            >
+                              <option value="prod">Prod</option>
+                              <option value="non-prod">Non-prod</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${
+                                row.isProd
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {row.isProd ? "Prod" : "Non-prod"}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-600">{formatTimestamp(row.createdAt)}</td>

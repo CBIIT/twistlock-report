@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -28,9 +28,11 @@ interface ReportFormProps {
 	token: string;
 	onSessionExpired: () => void;
 	onLogout: () => void;
+	defaultProjectName?: string;
+	autoSearchOnMount?: boolean;
 }
 
-export default function ReportForm({ token, onSessionExpired, onLogout }: ReportFormProps) {
+export default function ReportForm({ token, onSessionExpired, onLogout, defaultProjectName, autoSearchOnMount = false }: ReportFormProps) {
 	const [phase, setPhase] = useState<"search" | "select">("search");
 	const [repos, setRepos] = useState<RepoSelection[]>([]);
 	const [activeTagPicker, setActiveTagPicker] = useState<number | null>(null);
@@ -38,14 +40,29 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 	const [isSearching, setIsSearching] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [status, setStatus] = useState<StatusState | null>(null);
+	const hasAutoSearchedRef = useRef(false);
 
 	const form = useForm<SearchFormValues>({
 		resolver: zodResolver(searchFormSchema),
 		defaultValues: {
-			projectName: "",
+			projectName: defaultProjectName ?? "",
 			tpm: "",
 		},
 	});
+
+	useEffect(() => {
+		if (!defaultProjectName) {
+			return;
+		}
+
+		form.setValue("projectName", defaultProjectName, {
+			shouldDirty: false,
+			shouldTouch: false,
+			shouldValidate: false,
+		});
+	}, [defaultProjectName, form]);
+
+	const shouldAutoSearch = autoSearchOnMount && Boolean(defaultProjectName?.trim());
 
 	const checkedCount = repos.filter((r) => r.checked).length;
 	const allChecked = repos.length > 0 && repos.every((r) => r.checked);
@@ -84,7 +101,7 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 			const data = (await response.json()) as { repositories: ProjectSearchResult[] };
 			const selections: RepoSelection[] = data.repositories.map((r) => ({
 				repo: r.repo,
-				availableTags: r.tags.map((t) => t.tag).slice(0,9),
+				availableTags: r.tags.map((t) => t.tag),
 				selectedTag: r.tags[0]?.tag ?? "",
 				checked: true,
 			}));
@@ -202,6 +219,18 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 		}
 	}
 
+	useEffect(() => {
+		if (!shouldAutoSearch || hasAutoSearchedRef.current) {
+			return;
+		}
+
+		hasAutoSearchedRef.current = true;
+		void onSearch({
+			projectName: defaultProjectName ?? "",
+			tpm: "",
+		});
+	}, [defaultProjectName, shouldAutoSearch]);
+
 	return (
 		<div className="space-y-4">
 			<div className="flex justify-end">
@@ -224,64 +253,72 @@ export default function ReportForm({ token, onSessionExpired, onLogout }: Report
 
 			{phase === "search" && (
 				<>
-					<p className="text-sm text-gray-500">
-						Enter a project name to discover repositories and generate scan reports.
-					</p>
+					{shouldAutoSearch ? (
+						<p className="text-sm text-gray-500">Loading repositories for {defaultProjectName}...</p>
+					) : (
+						<>
+							<p className="text-sm text-gray-500">
+								Enter a project name to discover repositories and generate scan reports.
+							</p>
 
-					<Form {...form}>
-						<form className="space-y-4" onSubmit={form.handleSubmit(onSearch)} noValidate>
-							<FormField
-								control={form.control}
-								name="projectName"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>Project Name</FormLabel>
-										<FormControl>
-											<Input
-												placeholder="e.g. C3DC, CCDI, ICDC"
-												disabled={isSearching}
-												{...field}
-											/>
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-							{/* <FormField
-								control={form.control}
-								name="tpm"
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>TPM (optional)</FormLabel>
-										<FormControl>
-											<Input
-												placeholder="e.g. John Doe"
-												disabled={isSearching}
-												{...field}
-											/>
-										</FormControl>
-										<FormMessage />
-									</FormItem>
-								)}
-							/> */}
+							<Form {...form}>
+								<form className="space-y-4" onSubmit={form.handleSubmit(onSearch)} noValidate>
+									<FormField
+										control={form.control}
+										name="projectName"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Project Name</FormLabel>
+												<FormControl>
+													<Input
+														placeholder="e.g. C3DC, CCDI, ICDC"
+														disabled={isSearching}
+														{...field}
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									{/* <FormField
+										control={form.control}
+										name="tpm"
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>TPM (optional)</FormLabel>
+												<FormControl>
+													<Input
+														placeholder="e.g. John Doe"
+														disabled={isSearching}
+														{...field}
+													/>
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/> */}
 
-							<Button type="submit" className="w-full" disabled={isSearching}>
-								{isSearching ? "Searching…" : "Search Repositories"}
-							</Button>
-						</form>
-					</Form>
+									<Button type="submit" className="w-full" disabled={isSearching}>
+										{isSearching ? "Searching…" : "Search Repositories"}
+									</Button>
+								</form>
+							</Form>
+						</>
+					)}
 				</>
 			)}
 
 			{phase === "select" && (
 				<>
-					<button
-						type="button"
-						className="text-xs text-gray-500 hover:text-gray-900"
-						onClick={goBack}
-					>
-						← Back to Search
-					</button>
+					{!shouldAutoSearch ? (
+						<button
+							type="button"
+							className="text-xs text-gray-500 hover:text-gray-900"
+							onClick={goBack}
+						>
+							← Back to Search
+						</button>
+					) : null}
 
 					<p className="text-xs text-gray-500">
 						{checkedCount} of {repos.length} repositories selected

@@ -1,4 +1,5 @@
-import { TwistlockError, searchByProject } from "@/lib/twistlock";
+import { listProjectImageNames } from "@/lib/report-projects";
+import { TwistlockError, searchByImageNames } from "@/lib/twistlock";
 import { z } from "zod";
 
 const searchImagesSchema = z.object({
@@ -16,8 +17,13 @@ export async function POST(request: Request): Promise<Response> {
 		}
 
 		const { projectName, twistlockToken } = parsed.data;
+		const imageNames = await listProjectImageNames(projectName);
 
-		const repositories = await searchByProject(projectName, twistlockToken);
+		if (imageNames.length === 0) {
+			return Response.json({ error: `No repositories found for project "${projectName}" in database.` }, { status: 404 });
+		}
+
+		const repositories = await searchByImageNames(imageNames, twistlockToken);
 
 		return Response.json({ repositories });
 	} catch (error) {

@@ -8,6 +8,7 @@ const updatePayloadSchema = z.object({
 	project: z.string().min(1),
 	imageName: z.string().min(1),
 	currentTag: z.string().min(1),
+	isProd: z.boolean().optional().default(true),
 });
 
 type RouteContext = {
@@ -25,7 +26,7 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
 		const body = await request.json();
 		const parsed = updatePayloadSchema.safeParse(body);
 		if (!parsed.success) {
-			return Response.json({ error: "Invalid input. Project, image name, and current tag are required." }, { status: 400 });
+			return Response.json({ error: "Invalid input. Project, image name, and current tag are required. isProd must be true/false." }, { status: 400 });
 		}
 
 		const component = await updateComponent(parsedId, parsed.data);

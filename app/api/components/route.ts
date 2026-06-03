@@ -8,6 +8,7 @@ const componentPayloadSchema = z.object({
 	project: z.string().min(1),
 	imageName: z.string().min(1),
 	currentTag: z.string().min(1),
+	isProd: z.boolean().optional().default(true),
 });
 
 export async function GET(): Promise<Response> {
@@ -30,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
 		const parsed = componentPayloadSchema.safeParse(body);
 
 		if (!parsed.success) {
-			return Response.json({ error: "Invalid input. Project, image name, and current tag are required." }, { status: 400 });
+			return Response.json({ error: "Invalid input. Project, image name, and current tag are required. isProd must be true/false." }, { status: 400 });
 		}
 
 		const component = await createComponent(parsed.data);

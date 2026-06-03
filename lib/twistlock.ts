@@ -1,4 +1,4 @@
-import type { RegistrySearchItem, TwistlockScanResult, ProjectSearchResult } from "../types/twistlock";
+import type { RegistrySearchItem, ProjectSearchResult, TwistlockScanResult } from "../types/twistlock";
 
 const DEFAULT_BASE_URL = "https://twistlock.nci.nih.gov";
 
@@ -132,17 +132,14 @@ export async function getScanResult(
 
 const MAX_TAGS_PER_REPO = 100;
 
-export async function searchByProject(
-	projectName: string,
-	token: string
-): Promise<ProjectSearchResult[]> {
-	const search = encodeURIComponent(projectName);
+async function searchTagsByImageName(imageName: string, token: string): Promise<ProjectSearchResult> {
+	const search = encodeURIComponent(imageName);
 	const url =
 		`${getBaseUrl()}/api/v1/registry` +
 		"?collections=CRDC+CCDI+All+Collection&compact=true&offset=0" +
 		`&project=Central+Console&search=${search}&sort=scanTime&limit=250`;
-	
-		console.log(`Searching Twistlock for project "${projectName}" with API ${url}`);
+
+	console.log(`Searching Twistlock tags for image "${imageName}" with API ${url}`);
 
 	const res = await fetch(url, { headers: authHeader(token) });
 
@@ -150,48 +147,53 @@ export async function searchByProject(
 		throw new TwistlockError(401, "Authentication failed. Check your Twistlock token.");
 	}
 	if (!res.ok) {
-		throw new TwistlockError(res.status, `Registry search failed: HTTP ${res.status}`);
+		throw new TwistlockError(res.status, `Registry search failed for image ${imageName}: HTTP ${res.status}`);
 	}
 
 	const data = (await res.json()) as RegistrySearchItem[];
-	if (!data || data.length === 0) {
-		throw new TwistlockError(404, `No repositories found for project "${projectName}".`);
-	}
 
-	// Group by repo
-	const repoMap = new Map<string, { tag: string; creationTime: string }[]>();
-	for (const item of data) {
+	// De-duplicate tags and keep the latest scanTime per tag.
+	const tagMap = new Map<string, { tag: string; creationTime: string; scanTime: string }>();
+	for (const item of data ?? []) {
 		const repo = item.repoTag?.repo;
 		const tag = item.repoTag?.tag;
-		const creationTime = item.creationTime;
-		if (!repo || !tag) continue;
-
-		if (!repoMap.has(repo)) {
-			repoMap.set(repo, []);
+		if (!repo || !tag || repo !== imageName) {
+			continue;
 		}
-		const tags = repoMap.get(repo)!;
-		// De-duplicate tags
-		if (!tags.some((t) => t.tag === tag)) {
-			tags.push({ tag, creationTime: creationTime ?? "" });
+
+		const scanTime = item.scanTime ?? "";
+		const creationTime = item.creationTime ?? "";
+		const current = tagMap.get(tag);
+		if (!current || new Date(scanTime).getTime() > new Date(current.scanTime).getTime()) {
+			tagMap.set(tag, { tag, creationTime, scanTime });
 		}
 	}
 
-	if (repoMap.size === 0) {
-		throw new TwistlockError(404, `No repositories found for project "${projectName}".`);
+	const tags = [...tagMap.values()]
+		.sort((a, b) => new Date(b.scanTime).getTime() - new Date(a.scanTime).getTime())
+		.slice(0, MAX_TAGS_PER_REPO)
+		.map((entry) => ({
+			tag: entry.tag,
+			creationTime: entry.creationTime,
+			scanTime: entry.scanTime,
+		}));
+
+	return {
+		repo: imageName,
+		tags,
+	};
+}
+
+export async function searchByImageNames(
+	imageNames: string[],
+	token: string
+): Promise<ProjectSearchResult[]> {
+	const uniqueImages = [...new Set(imageNames.map((name) => name.trim()).filter((name) => name.length > 0))];
+	if (uniqueImages.length === 0) {
+		return [];
 	}
 
-	// Sort tags by creationTime descending, keep top N
-	const results: ProjectSearchResult[] = [];
-	for (const [repo, tags] of repoMap) {
-		tags.sort((a, b) => new Date(b.creationTime).getTime() - new Date(a.creationTime).getTime());
-		results.push({
-			repo,
-			tags: tags.slice(0, MAX_TAGS_PER_REPO),
-		});
-	}
+	const results = await Promise.all(uniqueImages.map((imageName) => searchTagsByImageName(imageName, token)));
 
-	// Sort repos alphabetically
-	results.sort((a, b) => a.repo.localeCompare(b.repo));
-
-	return results;
+	return results.sort((a, b) => a.repo.localeCompare(b.repo));
 }
