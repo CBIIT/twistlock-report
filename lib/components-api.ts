@@ -74,6 +74,12 @@ function isImageTagPrimaryKeyConflict(error: unknown): error is PgErrorLike {
 	return candidate.code === "23505" && candidate.constraint === "image_tag_mapping_pkey";
 }
 
+function isImageTagUniqueConflict(error: unknown): error is PgErrorLike {
+	if (!error || typeof error !== "object") return false;
+	const candidate = error as PgErrorLike;
+	return candidate.code === "23505" && candidate.constraint === "image_tag_mapping_unique";
+}
+
 async function syncImageTagMappingSequence(): Promise<void> {
 	await query(`
 		SELECT setval(
@@ -172,6 +178,77 @@ export async function createComponent(input: {
 	}
 
 	return mapRow(row);
+}
+
+export async function createComponentByImageName(input: {
+	imageName: string;
+	currentTag: string;
+	isProd: boolean;
+}): Promise<ComponentRecord> {
+	const imageName = sanitizeText(input.imageName, "Image name");
+	const currentTag = sanitizeText(input.currentTag, "Current tag");
+	const isProd = Boolean(input.isProd);
+
+	try {
+		const rows = await query<ComponentDbRow>(`
+			WITH matched AS (
+				SELECT pim.id AS project_image_mapping_id, pim.project
+				FROM image_tag_mapping itm
+				JOIN project_image_mapping pim ON pim.id = itm.project_image_mapping_id
+				WHERE itm.image_name = $1
+				ORDER BY itm.created_at DESC, itm.id DESC
+				LIMIT 1
+			),
+			demoted AS (
+				UPDATE image_tag_mapping
+				SET is_prod = false
+				WHERE $3::boolean
+					AND project_image_mapping_id = (SELECT project_image_mapping_id FROM matched)
+			),
+			inserted AS (
+				INSERT INTO image_tag_mapping (
+					project_image_mapping_id,
+					image_name,
+					current_tag,
+					is_prod,
+					created_at
+				)
+				SELECT
+					matched.project_image_mapping_id,
+					$1,
+					$2,
+					$3,
+					CURRENT_TIMESTAMP
+				FROM matched
+				RETURNING id, image_name, current_tag, is_prod, created_at
+			)
+			SELECT
+				i.id,
+				m.project,
+				i.image_name,
+				i.current_tag,
+				i.is_prod,
+				i.created_at
+			FROM inserted i
+			CROSS JOIN matched m
+		`, [imageName, currentTag, isProd]);
+
+		const row = rows[0];
+		if (!row) {
+			throw new ComponentsApiError(`No record found for imageName '${imageName}'.`, 404);
+		}
+
+		return mapRow(row);
+	} catch (error) {
+		if (isImageTagUniqueConflict(error)) {
+			throw new ComponentsApiError(
+				`Tag '${currentTag}' already exists for image '${imageName}'.`,
+				409
+			);
+		}
+
+		throw error;
+	}
 }
 
 export async function updateComponent(

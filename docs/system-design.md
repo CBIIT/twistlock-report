@@ -130,9 +130,18 @@ sequenceDiagram
 
 - `GET /api/components`
 - `POST /api/components`
+- `POST /api/components/by-image`
 - `PATCH /api/components/[id]`
 - `DELETE /api/components/[id]`
   - CRUD on project-image-tag mapping data via `lib/components-api.ts`
+
+- `POST /api/components/by-image`
+  - Input: `{ imageName, currentTag, isProd? }`
+  - Finds an existing `image_tag_mapping` record by `image_name`
+  - If no record exists for `imageName`, returns 404
+  - Reuses the matched row's `project_image_mapping_id` to insert a new `image_tag_mapping` row
+  - Writes `created_at` using server timestamp (`CURRENT_TIMESTAMP`)
+  - Returns 409 if `(project_image_mapping_id, current_tag)` already exists
 
 - `GET /api/iam/permissions`
   - Query: `username`, `service`
