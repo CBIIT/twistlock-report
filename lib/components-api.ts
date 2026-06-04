@@ -326,19 +326,33 @@ export async function deleteComponent(id: number): Promise<void> {
 
 	const rows = await query<{ id: number | string }>(`
 		WITH target AS (
-			SELECT itm.id, itm.project_image_mapping_id
+			SELECT itm.id, itm.project_image_mapping_id, itm.image_name, itm.current_tag
 			FROM image_tag_mapping itm
 			WHERE itm.id = $1
 		),
-		removed_tags AS (
-			DELETE FROM image_tag_mapping itm
-			WHERE itm.project_image_mapping_id = (SELECT project_image_mapping_id FROM target)
-			RETURNING itm.id
+		image_matches AS (
+			SELECT COUNT(*)::integer AS total
+			FROM image_tag_mapping itm
+			WHERE itm.image_name = (SELECT image_name FROM target)
 		),
 		removed_mapping AS (
 			DELETE FROM project_image_mapping pim
 			WHERE pim.id = (SELECT project_image_mapping_id FROM target)
+				AND (SELECT total FROM image_matches) = 1
 			RETURNING pim.id
+		),
+		removed_tags_single AS (
+			DELETE FROM image_tag_mapping itm
+			WHERE itm.image_name = (SELECT image_name FROM target)
+				AND (SELECT total FROM image_matches) = 1
+			RETURNING itm.id
+		),
+		removed_tags_multi AS (
+			DELETE FROM image_tag_mapping itm
+			WHERE itm.image_name = (SELECT image_name FROM target)
+				AND itm.current_tag = (SELECT current_tag FROM target)
+				AND (SELECT total FROM image_matches) > 1
+			RETURNING itm.id
 		)
 		SELECT id
 		FROM target
