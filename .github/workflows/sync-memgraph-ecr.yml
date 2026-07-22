@@ -1,0 +1,77 @@
+name: Sync memgraph-mage to CBIIT ECR
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily at 06:00 UTC
+  workflow_dispatch: {}     # allow manual trigger
+
+permissions:
+  id-token: write   # required for OIDC auth to AWS
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find latest memgraph tag on Docker Hub
+        id: find_tag
+        run: |
+          set -euo pipefail
+          page="https://hub.docker.com/v2/repositories/memgraph/memgraph-mage/tags?page_size=100"
+          all_tags=""
+          while [ -n "$page" ] && [ "$page" != "null" ]; do
+            resp=$(curl -s "$page")
+            tags=$(echo "$resp" | jq -r '.results[].name')
+            all_tags="$all_tags"$'\n'"$tags"
+            page=$(echo "$resp" | jq -r '.next')
+          done
+
+          # Strict memgraph X.Y.Z only, no 'latest' or anything else
+          latest=$(echo "$all_tags" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
+
+          if [ -z "$latest" ]; then
+            echo "No memgraph tag found!" >&2
+            exit 1
+          fi
+
+          echo "Latest memgraph tag: $latest"
+          echo "tag=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check if tag already exists in ECR
+        id: check
+        run: |
+          set +e
+          aws ecr describe-images \
+            --repository-name ${{ secrets.ECR_REPOSITORY }} \
+            --image-ids imageTag=${{ steps.find_tag.outputs.tag }} \
+            --region ${{ secrets.AWS_REGION }} > /dev/null 2>&1
+          exists=$?
+          set -e
+          if [ $exists -eq 0 ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull, tag, and push image
+        if: steps.check.outputs.exists == 'false'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker pull memgraph/memgraph-mage:${{ steps.find_tag.outputs.tag }}
+          docker tag memgraph/memgraph-mage:${{ steps.find_tag.outputs.tag }} \
+            $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ steps.find_tag.outputs.tag }}
+          docker push $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ steps.find_tag.outputs.tag }}
+
+      - name: Skip (already synced)
+        if: steps.check.outputs.exists == 'true'
+        run: echo "Tag ${{ steps.find_tag.outputs.tag }} already exists in ECR — nothing to do."
