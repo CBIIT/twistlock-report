@@ -24,17 +24,13 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN npm install -g pnpm@10.22.0
-
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder /app/next.config.ts ./next.config.ts
+# Standalone output ships only production-traced dependencies, so no package
+# manager or devDependencies are installed in the runtime image.
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/lib/template.docx ./lib/template.docx
 
 EXPOSE 3000
 
-CMD ["pnpm", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "server.js"]
