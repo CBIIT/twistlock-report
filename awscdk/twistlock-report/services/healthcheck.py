@@ -10,6 +10,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as subs
+from aws_cdk import triggers
 
 
 class healthCheckService:
@@ -57,7 +58,16 @@ class healthCheckService:
             topic_name=f"{name}-twistlock-health",
             display_name="Twistlock API Health",
         )
-        topic.add_subscription(subs.EmailSubscription(alert_email))
+        # alert_email may be a comma-separated list; always include the standing
+        # on-call recipients below.
+        recipients = [e.strip() for e in alert_email.split(",") if e.strip()] + [
+            "yizhen.chen@nih.gov",
+            "michael.fleming@nih.gov",
+            "wei.yu@nih.gov",
+            "amit.mukherjee@nih.gov",
+        ]
+        for email in dict.fromkeys(recipients):
+            topic.add_subscription(subs.EmailSubscription(email))
 
         # Lambda runs in the VPC private subnets (same path the Fargate task uses
         # to reach the internal Twistlock host); allow all egress.
@@ -120,6 +130,17 @@ class healthCheckService:
             rule_name=f"{name}-twistlock-health",
             schedule=events.Schedule.expression(schedule),
             targets=[targets.LambdaFunction(health_fn)],
+        )
+
+        # Invoke once at deploy time so the ApiHealthy metric has a datapoint
+        # immediately. The scheduled rule does not fire until one full interval
+        # after creation, and the alarm treats that initial gap as breaching,
+        # which otherwise raises a false alarm against a healthy API.
+        triggers.Trigger(
+            self,
+            "{}-{}-seed".format(prefix, service),
+            handler=health_fn,
+            timeout=Duration.minutes(2),
         )
 
         # Alarm on the overall health metric. Period matches the hourly schedule;
