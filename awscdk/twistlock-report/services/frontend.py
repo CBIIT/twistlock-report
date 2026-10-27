@@ -21,7 +21,7 @@ class frontendService:
         command = None
 
     environment={
-            TWISTLOCK_BASE_URL:"https://twistlock.nci.nih.gov",
+            "TWISTLOCK_BASE_URL":"https://twistlock.nci.nih.gov",
             #"NEW_RELIC_LABELS":"Project:{};Environment:{}".format('gc', config['main']['tier']),
             #"NEW_RELIC_NO_CONFIG_FILE":"true",
             #"REACT_APP_ABOUT_CONTENT_URL":config[service]['about_content_url'],
