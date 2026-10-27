@@ -83,6 +83,9 @@ class healthCheckService:
             vpc=self.VPC,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[security_group],
+            # Imported VPC route tables make CDK classify the selected subnet as
+            # public; the probe only reaches the internal Twistlock host, so allow it.
+            allow_public_subnet=True,
             environment={
                 "TWISTLOCK_BASE_URL": base_url,
                 "CHECKS": checks,
