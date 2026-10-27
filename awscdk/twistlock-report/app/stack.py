@@ -22,6 +22,7 @@ from aws_cdk import aws_efs as efs
 from aws_cdk import Duration
 from aws_cdk import RemovalPolicy
 from services import frontend
+from services import healthcheck
 import aws_cdk as cdk
 
 class Stack(Stack):
@@ -114,6 +115,9 @@ class Stack(Stack):
         
         # Frontend Service
         frontend.frontendService.createService(self, config)
+
+        # Twistlock API health check + email alerting
+        healthcheck.healthCheckService.createService(self, config)
 
         # Backend Service
         #backend.backendService.createService(self, config,[app_security_group])

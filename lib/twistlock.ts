@@ -26,13 +26,40 @@ export class TwistlockError extends Error {
 	}
 }
 
+// Upstream calls must complete well before the ALB idle timeout (60s), otherwise
+// the load balancer returns a 504 to the client while the request is still pending.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function getTimeoutMs(): number {
+	const parsed = Number.parseInt(process.env.TWISTLOCK_TIMEOUT_MS ?? "", 10);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+	const timeoutMs = getTimeoutMs();
+	try {
+		return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+	} catch (error) {
+		if (error instanceof TwistlockError) {
+			throw error;
+		}
+		if (error instanceof DOMException && error.name === "TimeoutError") {
+			throw new TwistlockError(
+				504,
+				`Twistlock did not respond within ${Math.round(timeoutMs / 1000)}s. The service may be slow or unavailable, please try again.`
+			);
+		}
+		throw new TwistlockError(502, "Unable to reach Twistlock. The service may be unavailable, please try again.");
+	}
+}
+
 export async function authenticate(
 	username: string,
 	password: string
 ): Promise<string> {
 	const url = `${getBaseUrl()}/api/v1/authenticate`;
 
-	const res = await fetch(url, {
+	const res = await fetchWithTimeout(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ username, password }),
@@ -65,7 +92,7 @@ export async function resolveRegistry(
 		`&project=Central+Console&reverse=true&search=${search}&sort=vulnerabilityRiskScore`;
 
 	console.log(`Resolving registry from Twistlock API ${url}`);
-	const res = await fetch(url, { headers: authHeader(token) });
+	const res = await fetchWithTimeout(url, { headers: authHeader(token) });
 
 	if (res.status === 401) {
 		throw new TwistlockError(401, "Authentication failed. Check your Twistlock token.");
@@ -105,7 +132,7 @@ export async function getScanResult(
 
 
 	console.log(`Fetching scan result from Twistlock from API ${url}`);
-	const res = await fetch(url, { headers: authHeader(token) });
+	const res = await fetchWithTimeout(url, { headers: authHeader(token) });
 
 	if (res.status === 401) {
 		throw new TwistlockError(401, "Authentication failed. Check your Twistlock token.");
@@ -141,7 +168,7 @@ async function searchTagsByImageName(imageName: string, token: string): Promise<
 
 	console.log(`Searching Twistlock tags for image "${imageName}" with API ${url}`);
 
-	const res = await fetch(url, { headers: authHeader(token) });
+	const res = await fetchWithTimeout(url, { headers: authHeader(token) });
 
 	if (res.status === 401) {
 		throw new TwistlockError(401, "Authentication failed. Check your Twistlock token.");
