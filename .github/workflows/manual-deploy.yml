@@ -33,10 +33,10 @@ jobs:
     - name: Check out code
       uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5     # v2.7.0
 
-    - name: Set up Python 3.9
+    - name: Set up Python 3.12
       uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa     # v4.8.0
       with:
-        python-version: "3.9"
+        python-version: "3.12"
 
     - name: Set up Node
       uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7     # v3.8.2
