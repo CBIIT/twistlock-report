@@ -58,7 +58,16 @@ class healthCheckService:
             topic_name=f"{name}-twistlock-health",
             display_name="Twistlock API Health",
         )
-        topic.add_subscription(subs.EmailSubscription(alert_email))
+        # alert_email may be a comma-separated list; always include the standing
+        # on-call recipients below.
+        recipients = [e.strip() for e in alert_email.split(",") if e.strip()] + [
+            "yizhen.chen@nih.gov",
+            "michael.fleming@nih.gov",
+            "wei.yu@nih.gov",
+            "amit.mukherjee@nih.gov",
+        ]
+        for email in dict.fromkeys(recipients):
+            topic.add_subscription(subs.EmailSubscription(email))
 
         # Lambda runs in the VPC private subnets (same path the Fargate task uses
         # to reach the internal Twistlock host); allow all egress.
