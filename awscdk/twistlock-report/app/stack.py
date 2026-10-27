@@ -23,6 +23,7 @@ from aws_cdk import Duration
 from aws_cdk import RemovalPolicy
 from services import frontend
 from services import healthcheck
+from services import cvereport
 import aws_cdk as cdk
 
 class Stack(Stack):
@@ -118,6 +119,9 @@ class Stack(Stack):
 
         # Twistlock API health check + email alerting
         healthcheck.healthCheckService.createService(self, config)
+
+        # Weekday CVE digest email per ECR repo
+        cvereport.cveReportService.createService(self, config)
 
         # Backend Service
         #backend.backendService.createService(self, config,[app_security_group])
