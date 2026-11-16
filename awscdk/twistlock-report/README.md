@@ -1,6 +1,21 @@
 
 # Welcome to your CDK Python project!
 
+## Scheduled CVE reports
+
+The weekday CVE report publishes a separate SNS message for each repository
+with recipients in `config/cve_report.json`. Set the email addresses in that
+repository's `repos` array; an empty array disables its report. After deploying
+the CDK stack, each address must confirm the SNS subscription for each
+repository before it can receive reports. Changing or removing recipients
+updates the subscriptions on the next deployment.
+
+The `schedule` is an EventBridge expression in UTC. The report Lambda needs
+network access from its VPC to RDS, Secrets Manager, and SNS (through NAT or
+appropriate VPC endpoints). Large messages are sent in numbered parts to stay
+under the SNS size limit. SNS publishes can succeed even when a subscription is still
+unconfirmed, so check the SNS subscription status if reports do not arrive.
+
 This is a blank project for CDK development with Python.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.

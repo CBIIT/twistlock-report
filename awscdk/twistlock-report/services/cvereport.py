@@ -7,6 +7,8 @@ from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_sns_subscriptions as subs
 
 
 class cveReportService:
@@ -14,12 +16,11 @@ class cveReportService:
 
     A scheduled Lambda (in the VPC, so it can reach the RDS instance) looks up the
     latest release tag for each configured repo, lists its CVEs from the
-    vulnerability database, and emails the repo's recipients via SES.
+    vulnerability database, and publishes to an SNS topic for each repo.
 
     Recipients and settings come from ``config/cve_report.json``::
 
         {
-          "sender": "shawn.wang@nih.gov",
           "schedule": "cron(0 14 ? * MON-FRI *)",   # 10am ET (EDT); UTC
           "registry": "<acct>.dkr.ecr.us-east-1.amazonaws.com",
           "repos": { "<image_name>": ["email", ...] }
@@ -46,6 +47,21 @@ class cveReportService:
         with open(os.path.join(os.path.dirname(__file__), "..", "config", "cve_report.json")) as fp:
             report_config = json.load(fp)
         schedule = report_config.get("schedule", "cron(0 14 ? * MON-FRI *)")
+        topics = {}
+        for image_name, recipients in report_config.get("repos", {}).items():
+            recipients = list(dict.fromkeys(email.strip() for email in recipients if email and email.strip()))
+            if not recipients:
+                continue
+            topic = sns.Topic(self, f"{prefix}-{service}-{image_name}-topic")
+            for email in recipients:
+                topic.add_subscription(subs.EmailSubscription(email))
+            topics[image_name] = topic
+
+        runtime_config = {
+            "subject_prefix": report_config.get("subject_prefix", "[CVE Report]"),
+            "registry": report_config.get("registry", ""),
+            "repos": {image_name: topic.topic_arn for image_name, topic in topics.items()},
+        }
 
         # Lambda egress to the RDS instance (same VPC path the app uses).
         security_group = ec2.SecurityGroup(
@@ -71,11 +87,11 @@ class cveReportService:
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[security_group],
             # Imported VPC route tables make CDK classify the selected subnet as
-            # public; the Lambda only reaches the internal RDS host, so allow it.
+            # public, so allow it.
             allow_public_subnet=True,
             environment={
                 "DB_SECRET_NAME": db_secret,
-                "REPORT_CONFIG": json.dumps(report_config),
+                "REPORT_CONFIG": json.dumps(runtime_config),
             },
         )
 
@@ -88,13 +104,8 @@ class cveReportService:
                 ],
             )
         )
-        report_fn.add_to_role_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["ses:SendEmail", "ses:SendRawEmail"],
-                resources=["*"],
-            )
-        )
+        for topic in topics.values():
+            topic.grant_publish(report_fn)
 
         events.Rule(
             self,
