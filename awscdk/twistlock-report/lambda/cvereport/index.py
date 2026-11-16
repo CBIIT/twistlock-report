@@ -2,14 +2,14 @@
 
 For each configured ECR repo, finds the latest release tag (highest dotted-numeric
 version, e.g. 2.0.1.23) recorded in the vulnerability database, lists every CVE on
-that image, and emails the repo's recipients via SES.
+that image, and publishes the report to the repo's SNS topic.
 
 Runtime config comes from environment variables set by the CDK service:
 
 * ``DB_SECRET_NAME``   Secrets Manager id holding the RDS credentials
                        (keys: username, password, host, port, dbname).
-* ``REPORT_CONFIG``    JSON: {"sender", "subject_prefix", "registry",
-                       "repos": {"<image_name>": ["email", ...]}}.
+* ``REPORT_CONFIG``    JSON: {"subject_prefix", "registry",
+                       "repos": {"<image_name>": "<topic_arn>"}}.
 
 Only boto3 (bundled) and the vendored pure-Python pg8000 driver are used, so the
 asset needs no build step.
@@ -30,7 +30,6 @@ import boto3  # noqa: E402
 DB_SECRET_NAME = os.environ["DB_SECRET_NAME"]
 CONFIG = json.loads(os.environ.get("REPORT_CONFIG", "{}"))
 
-SENDER = CONFIG.get("sender", "")
 SUBJECT_PREFIX = CONFIG.get("subject_prefix", "[CVE Report]")
 REGISTRY = CONFIG.get("registry", "")
 REPOS = CONFIG.get("repos", {})
@@ -41,7 +40,7 @@ SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _VERSION_RE = re.compile(r"\d+(?:\.\d+){2,3}")
 
 _secrets = boto3.client("secretsmanager")
-_ses = boto3.client("ses")
+_sns = boto3.client("sns")
 
 
 def _db_connect():
@@ -138,15 +137,27 @@ def _format_email(image_name, tag, scanned_at, vulns):
     return subject, "\n".join(lines)
 
 
+def _publish_report(topic_arn, subject, body):
+    message_bytes = body.encode("utf-8")
+    chunks = []
+    while message_bytes:
+        chunk = message_bytes[:250 * 1024].decode("utf-8", errors="ignore")
+        if len(message_bytes) > 250 * 1024 and "\n" in chunk:
+            chunk = chunk[:chunk.rfind("\n") + 1]
+        chunks.append(chunk)
+        message_bytes = message_bytes[len(chunk.encode("utf-8")):]
+
+    subject = re.sub(r"[\x00-\x1f\x7f]", " ", subject)
+    for index, chunk in enumerate(chunks, 1):
+        suffix = f" (part {index}/{len(chunks)})" if len(chunks) > 1 else ""
+        _sns.publish(TopicArn=topic_arn, Subject=subject[:99 - len(suffix)] + suffix, Message=chunk)
+
+
 def handler(event, context):
     sent = []
     conn = _db_connect()
     try:
-        for image_name, recipients in REPOS.items():
-            recipients = [r.strip() for r in recipients if r and r.strip()]
-            if not recipients:
-                continue
-
+        for image_name, topic_arn in REPOS.items():
             latest = _latest_scan(conn, image_name)
             if latest is None:
                 subject = f"{SUBJECT_PREFIX} {image_name}: no scan data found"
@@ -159,15 +170,8 @@ def handler(event, context):
                 vulns = _vulnerabilities(conn, scan_id)
                 subject, body = _format_email(image_name, tag, scanned_at, vulns)
 
-            _ses.send_email(
-                Source=SENDER,
-                Destination={"ToAddresses": recipients},
-                Message={
-                    "Subject": {"Data": subject},
-                    "Body": {"Text": {"Data": body}},
-                },
-            )
-            sent.append({"image_name": image_name, "recipients": recipients, "subject": subject})
+            _publish_report(topic_arn, subject, body)
+            sent.append({"image_name": image_name, "topic_arn": topic_arn, "subject": subject})
     finally:
         conn.close()
 

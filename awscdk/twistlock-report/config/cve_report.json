@@ -1,5 +1,4 @@
 {
-  "sender": "shawn.wang@nih.gov",
   "subject_prefix": "[CCDI CVE Report]",
   "registry": "986019062625.dkr.ecr.us-east-1.amazonaws.com",
   "schedule": "cron(0 14 ? * MON-FRI *)",
@@ -26,6 +25,8 @@
     "ccdi-hub-backend": ["shawn.wang@nih.gov"],
     "ccdi-hub-cgsexport": ["shawn.wang@nih.gov"],
     "ccdi-hub-frontend": ["shawn.wang@nih.gov"],
+    "ccdi-integrated-backend": ["shawn.wang@nih.gov"],
+    "ccdi-integrated-frontend": ["shawn.wang@nih.gov"],
     "ccdi-ins-backend": [],
     "ccdi-ins-frontend": [],
     "ccdi-ins-rest-backend": [],
