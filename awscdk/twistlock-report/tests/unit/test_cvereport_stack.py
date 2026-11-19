@@ -67,6 +67,16 @@ class CveReportStackTest(unittest.TestCase):
         self.assertEqual(published_topics, set(topics))
         self.assertNotIn("ses:Send", json.dumps(statements))
 
+        ecr_statement = next(s for s in statements if s["Action"] == "ecr:DescribeImages")
+        self.assertEqual(set(ecr_statement["Resource"]), {
+            f"arn:aws:ecr:us-east-1:123456789012:repository/{name}"
+            for name in ("repo-one", "repo-two", "repo-three")
+        })
+        env = function["Properties"]["Environment"]["Variables"]
+        self.assertEqual(env["TWISTLOCK_SECRET"], "prod/twistlock")
+        secret_statement = next(s for s in statements if s["Action"] == "secretsmanager:GetSecretValue")
+        self.assertIn("prod/twistlock", json.dumps(secret_statement["Resource"]))
+
 
 if __name__ == "__main__":
     unittest.main()
