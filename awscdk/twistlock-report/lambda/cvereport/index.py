@@ -1,16 +1,21 @@
 """Weekday CVE digest.
 
-For each configured ECR repo, finds the latest release tag (highest dotted-numeric
-version, e.g. 2.0.1.23) recorded in the vulnerability database, lists every CVE on
-that image, and publishes the report to the repo's SNS topic. Repos that share a
-topic are combined into a single digest email.
+For each configured ECR repo, finds the latest release tag (the most recently
+pushed ECR image whose tag contains a dotted version, e.g. ccdi-1.2.0.7), lists
+every CVE on that image, and publishes the report to the repo's SNS topic. Repos
+that share a topic are combined into a single digest email.
+
+CVEs come from the vulnerability database scan for that exact tag; when the tag
+has not been ingested yet, the Twistlock registry API is queried live instead.
 
 Runtime config comes from environment variables set by the CDK service:
 
-* ``DB_SECRET_NAME``   Secrets Manager id holding the RDS credentials
-                       (keys: username, password, host, port, dbname).
-* ``REPORT_CONFIG``    JSON: {"subject_prefix", "registry",
-                       "repos": {"<image_name>": "<topic_arn>"}}.
+* ``DB_SECRET_NAME``      Secrets Manager id holding the RDS credentials
+                          (keys: username, password, host, port, dbname).
+* ``REPORT_CONFIG``       JSON: {"subject_prefix", "registry",
+                          "repos": {"<image_name>": "<topic_arn>"}}.
+* ``TWISTLOCK_BASE_URL``  Twistlock console URL for the live lookup.
+* ``TWISTLOCK_SECRET``    Secrets Manager id holding Twistlock username/password.
 
 Only boto3 (bundled) and the vendored pure-Python pg8000 driver are used, so the
 asset needs no build step.
@@ -21,6 +26,8 @@ import os
 import re
 import ssl
 import sys
+import urllib.parse
+import urllib.request
 
 # Vendored dependencies (pg8000 and its pure-Python deps) live next to this file.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vendor"))
@@ -34,6 +41,9 @@ CONFIG = json.loads(os.environ.get("REPORT_CONFIG", "{}"))
 SUBJECT_PREFIX = CONFIG.get("subject_prefix", "[CVE Report]")
 REGISTRY = CONFIG.get("registry", "")
 REPOS = CONFIG.get("repos", {})
+TWISTLOCK_BASE_URL = os.environ.get("TWISTLOCK_BASE_URL", "https://twistlock.nci.nih.gov").rstrip("/")
+TWISTLOCK_SECRET = os.environ.get("TWISTLOCK_SECRET", "")
+TWISTLOCK_TIMEOUT = float(os.environ.get("TWISTLOCK_TIMEOUT_SECONDS", "60"))
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 # Match a 3- or 4-part dotted version embedded anywhere in a tag (prod-2.0.1.23,
@@ -42,6 +52,8 @@ _VERSION_RE = re.compile(r"\d+(?:\.\d+){2,3}")
 
 _secrets = boto3.client("secretsmanager")
 _sns = boto3.client("sns")
+_ecr = boto3.client("ecr")
+_twistlock_token = None
 
 
 def _db_connect():
@@ -71,27 +83,91 @@ def _version_key(tag):
     return best
 
 
-def _latest_scan(conn, image_name):
-    """Return (scan_id, tag, scanned_at, vuln_count) for the latest release, or None."""
+def _latest_ecr_tag(image_name):
+    """Return (tag, pushed_at) for the newest pushed image with a versioned tag, or None.
+
+    Push time is used instead of version ordering because version numbers get
+    reset (e.g. ccdi-1.2.0.98 was followed by ccdi-1.2.0.3).
+    """
+    best = None
+    pages = _ecr.get_paginator("describe_images").paginate(
+        repositoryName=image_name, filter={"tagStatus": "TAGGED"}
+    )
+    for page in pages:
+        for image in page.get("imageDetails", []):
+            tags = [t for t in image.get("imageTags", []) if _version_key(t)]
+            if not tags:
+                continue
+            pushed_at = image["imagePushedAt"]
+            if best is None or pushed_at > best[1]:
+                best = (max(tags, key=_version_key), pushed_at)
+    return best
+
+
+def _db_scan_for_tag(conn, image_name, tag):
+    """Return (scan_id, scanned_at) of the newest DB scan for this exact tag, or None."""
     rows = conn.run(
         """
-        SELECT s.id, COALESCE(s.scanned_tag, itm.current_tag) AS tag,
-               s.scanned_at, s.vuln_count
+        SELECT s.id, s.scanned_at
         FROM scans s
         JOIN image_tag_mapping itm ON itm.id = s.component_id
         WHERE itm.image_name = :image_name
+          AND COALESCE(s.scanned_tag, itm.current_tag) = :tag
+        ORDER BY s.scanned_at DESC
+        LIMIT 1
         """,
         image_name=image_name,
+        tag=tag,
     )
-    if not rows:
+    return tuple(rows[0]) if rows else None
+
+
+def _twistlock_request(method, path, body=None, token=None):
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(TWISTLOCK_BASE_URL + path, data=data, method=method, headers=headers)
+    with urllib.request.urlopen(req, timeout=TWISTLOCK_TIMEOUT) as resp:
+        return json.loads(resp.read() or b"null")
+
+
+def _twistlock_auth():
+    global _twistlock_token
+    if _twistlock_token is None:
+        secret = json.loads(_secrets.get_secret_value(SecretId=TWISTLOCK_SECRET)["SecretString"])
+        result = _twistlock_request(
+            "POST", "/api/v1/authenticate",
+            body={"username": secret["username"], "password": secret["password"]},
+        )
+        _twistlock_token = result["token"]
+    return _twistlock_token
+
+
+def _twistlock_scan(image_name, tag):
+    """Live-query Twistlock for this image tag; return (scan_time, vulns) or None."""
+    params = {"registry": REGISTRY} if REGISTRY else {}
+    params["search"] = f"{image_name}:{tag}"
+    query = urllib.parse.urlencode(params)
+    results = _twistlock_request("GET", f"/api/v34.03/registry?{query}", token=_twistlock_auth()) or []
+    matches = [
+        r for r in results
+        if (r.get("repoTag") or {}).get("repo") == image_name and (r.get("repoTag") or {}).get("tag") == tag
+    ]
+    if not matches:
         return None
+    scan = max(matches, key=lambda r: r.get("scanTime") or "")
+    vulns = [
+        (v.get("cve"), v.get("severity"), v.get("packageName"), v.get("packageVersion"),
+         v.get("status"), v.get("cvss"))
+        for v in scan.get("vulnerabilities") or []
+        if v.get("cve")
+    ]
+    return scan.get("scanTime"), _sort_vulns(vulns)
 
-    def sort_key(row):
-        version = _version_key(row[1])
-        # Prefer the highest version; fall back to most recent scan time.
-        return (version is not None, version or (), row[2])
 
-    return max(rows, key=sort_key)
+def _sort_vulns(vulns):
+    return sorted(vulns, key=lambda r: (SEVERITY_ORDER.get((r[1] or "").lower(), 99), r[0]))
 
 
 def _vulnerabilities(conn, scan_id):
@@ -103,11 +179,10 @@ def _vulnerabilities(conn, scan_id):
         """,
         scan_id=scan_id,
     )
-    rows.sort(key=lambda r: (SEVERITY_ORDER.get((r[1] or "").lower(), 99), r[0]))
-    return rows
+    return _sort_vulns(rows)
 
 
-def _format_email(image_name, tag, scanned_at, vulns):
+def _format_email(image_name, tag, scanned_at, vulns, source="vulnerability DB"):
     image_ref = f"{REGISTRY}/{image_name}:{tag}" if REGISTRY else f"{image_name}:{tag}"
     counts = {}
     for _cve, severity, *_rest in vulns:
@@ -120,6 +195,7 @@ def _format_email(image_name, tag, scanned_at, vulns):
         f"Latest tag : {tag}",
         f"Image      : {image_ref}",
         f"Scanned at : {scanned_at}",
+        f"Source     : {source}",
         f"Total CVEs : {len(vulns)}  ({count_line})",
         "",
     ]
@@ -163,8 +239,7 @@ def _format_digest(reports):
     width = max(len(r["image_name"]) for r in reports)
     lines = [f"CVE summary for {len(reports)} repositories:", ""]
     for r in reports:
-        status = f"{r['tag']}: {r['cve_count']} CVE(s)" if r["tag"] is not None else "no scan data found"
-        lines.append(f"  {r['image_name'].ljust(width)}  {status}")
+        lines.append(f"  {r['image_name'].ljust(width)}  {r['status']}")
     for r in reports:
         lines += ["", "=" * 72, r["body"]]
 
@@ -172,29 +247,57 @@ def _format_digest(reports):
     return subject, "\n".join(lines)
 
 
+def _build_report(conn, image_name):
+    """Return the report dict for one repo: tag, cve_count, status, subject, body."""
+    report = {"image_name": image_name, "tag": None, "cve_count": None}
+    try:
+        latest = _latest_ecr_tag(image_name)
+        if latest is None:
+            report["status"] = "no versioned image tag found in ECR"
+            report["subject"] = f"{SUBJECT_PREFIX} {image_name}: {report['status']}"
+            report["body"] = (
+                f"Repository : {image_name}\n"
+                "No image with a dotted-version tag (e.g. 1.2.0.7) was found in ECR."
+            )
+            return report
+
+        tag, pushed_at = latest
+        report["tag"] = tag
+        db_scan = _db_scan_for_tag(conn, image_name, tag)
+        if db_scan is not None:
+            scan_id, scanned_at = db_scan
+            vulns, source = _vulnerabilities(conn, scan_id), "vulnerability DB"
+        else:
+            live = _twistlock_scan(image_name, tag)
+            if live is None:
+                report["status"] = f"{tag}: not scanned yet"
+                report["subject"] = f"{SUBJECT_PREFIX} {image_name} {tag}: not scanned yet"
+                report["body"] = (
+                    f"Repository : {image_name}\n"
+                    f"Latest tag : {tag}  (pushed {pushed_at})\n"
+                    "No scan for this tag was found in the vulnerability DB or Twistlock."
+                )
+                return report
+            scanned_at, vulns = live
+            source = "Twistlock (live lookup; not yet in vulnerability DB)"
+
+        report["cve_count"] = len(vulns)
+        report["status"] = f"{tag}: {len(vulns)} CVE(s)"
+        report["subject"], report["body"] = _format_email(image_name, tag, scanned_at, vulns, source)
+    except Exception as exc:  # noqa: BLE001 - one bad repo must not block the digest
+        print(f"Report for {image_name} failed: {exc!r}")
+        report["status"] = f"error: {type(exc).__name__}"
+        report["subject"] = f"{SUBJECT_PREFIX} {image_name}: report failed"
+        report["body"] = f"Repository : {image_name}\nReport failed: {exc!r}"
+    return report
+
+
 def handler(event, context):
     reports_by_topic = {}
     conn = _db_connect()
     try:
         for image_name, topic_arn in REPOS.items():
-            latest = _latest_scan(conn, image_name)
-            if latest is None:
-                tag, cve_count = None, None
-                subject = f"{SUBJECT_PREFIX} {image_name}: no scan data found"
-                body = (
-                    f"No scan records were found for repository '{image_name}'.\n"
-                    "Either the image has not been ingested yet or the name is misconfigured."
-                )
-            else:
-                scan_id, tag, scanned_at, _vuln_count = latest
-                vulns = _vulnerabilities(conn, scan_id)
-                cve_count = len(vulns)
-                subject, body = _format_email(image_name, tag, scanned_at, vulns)
-
-            reports_by_topic.setdefault(topic_arn, []).append({
-                "image_name": image_name, "tag": tag, "cve_count": cve_count,
-                "subject": subject, "body": body,
-            })
+            reports_by_topic.setdefault(topic_arn, []).append(_build_report(conn, image_name))
     finally:
         conn.close()
 
