@@ -52,6 +52,29 @@ class CveReportTest(unittest.TestCase):
         self.assertIn("CVE-1", publication["Message"])
         connection.close.assert_called_once()
 
+    def test_groups_repositories_sharing_a_topic_into_one_email(self):
+        report = self.load_report()
+        shared = "arn:aws:sns:us-east-1:123456789012:shared"
+        other = "arn:aws:sns:us-east-1:123456789012:other"
+        report.REPOS = {"repo-a": shared, "repo-b": shared, "repo-c": other}
+        report._sns = MagicMock()
+        scans = {"repo-a": (1, "1.0.0", "today", 1), "repo-b": None, "repo-c": (3, "3.0.0", "today", 1)}
+        vulns = {1: [("CVE-A", "high", "pkg", "1", "fixed", 7)], 3: [("CVE-C", "low", "pkg", "1", "", 2)]}
+        with patch.object(report, "_db_connect", return_value=MagicMock()), patch.object(
+            report, "_latest_scan", side_effect=lambda _conn, name: scans[name]
+        ), patch.object(report, "_vulnerabilities", side_effect=lambda _conn, scan_id: vulns[scan_id]):
+            report.handler({}, None)
+
+        publications = {call.kwargs["TopicArn"]: call.kwargs for call in report._sns.publish.call_args_list}
+        self.assertEqual(report._sns.publish.call_count, 2)
+        digest = publications[shared]
+        self.assertIn("2 repos: 1 CVE(s)", digest["Subject"])
+        self.assertIn("CVE-A", digest["Message"])
+        self.assertIn("repo-b", digest["Message"])
+        self.assertIn("no scan data found", digest["Message"])
+        self.assertNotIn("CVE-C", digest["Message"])
+        self.assertIn("repo-c", publications[other]["Subject"])
+
     def test_splits_large_report_and_limits_subject(self):
         report = self.load_report()
         report.REPOS = {"example": "arn:aws:sns:us-east-1:123456789012:example"}

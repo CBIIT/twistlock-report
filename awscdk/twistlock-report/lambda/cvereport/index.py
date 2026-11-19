@@ -2,7 +2,8 @@
 
 For each configured ECR repo, finds the latest release tag (highest dotted-numeric
 version, e.g. 2.0.1.23) recorded in the vulnerability database, lists every CVE on
-that image, and publishes the report to the repo's SNS topic.
+that image, and publishes the report to the repo's SNS topic. Repos that share a
+topic are combined into a single digest email.
 
 Runtime config comes from environment variables set by the CDK service:
 
@@ -153,13 +154,32 @@ def _publish_report(topic_arn, subject, body):
         _sns.publish(TopicArn=topic_arn, Subject=subject[:99 - len(suffix)] + suffix, Message=chunk)
 
 
+def _format_digest(reports):
+    """Combine per-repo reports (dicts) that share a topic into one subject/body."""
+    if len(reports) == 1:
+        return reports[0]["subject"], reports[0]["body"]
+
+    total = sum(r["cve_count"] or 0 for r in reports)
+    width = max(len(r["image_name"]) for r in reports)
+    lines = [f"CVE summary for {len(reports)} repositories:", ""]
+    for r in reports:
+        status = f"{r['tag']}: {r['cve_count']} CVE(s)" if r["tag"] is not None else "no scan data found"
+        lines.append(f"  {r['image_name'].ljust(width)}  {status}")
+    for r in reports:
+        lines += ["", "=" * 72, r["body"]]
+
+    subject = f"{SUBJECT_PREFIX} {len(reports)} repos: {total} CVE(s)"
+    return subject, "\n".join(lines)
+
+
 def handler(event, context):
-    sent = []
+    reports_by_topic = {}
     conn = _db_connect()
     try:
         for image_name, topic_arn in REPOS.items():
             latest = _latest_scan(conn, image_name)
             if latest is None:
+                tag, cve_count = None, None
                 subject = f"{SUBJECT_PREFIX} {image_name}: no scan data found"
                 body = (
                     f"No scan records were found for repository '{image_name}'.\n"
@@ -168,12 +188,26 @@ def handler(event, context):
             else:
                 scan_id, tag, scanned_at, _vuln_count = latest
                 vulns = _vulnerabilities(conn, scan_id)
+                cve_count = len(vulns)
                 subject, body = _format_email(image_name, tag, scanned_at, vulns)
 
-            _publish_report(topic_arn, subject, body)
-            sent.append({"image_name": image_name, "topic_arn": topic_arn, "subject": subject})
+            reports_by_topic.setdefault(topic_arn, []).append({
+                "image_name": image_name, "tag": tag, "cve_count": cve_count,
+                "subject": subject, "body": body,
+            })
     finally:
         conn.close()
+
+    # One email per topic: repos that share recipients are grouped into a digest.
+    sent = []
+    for topic_arn, reports in reports_by_topic.items():
+        subject, body = _format_digest(reports)
+        _publish_report(topic_arn, subject, body)
+        sent.append({
+            "image_names": [r["image_name"] for r in reports],
+            "topic_arn": topic_arn,
+            "subject": subject,
+        })
 
     result = {"sent": sent}
     print(json.dumps(result, default=str))
