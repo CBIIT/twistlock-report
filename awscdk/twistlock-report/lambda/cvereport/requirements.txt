@@ -1,2 +1,4 @@
 # Vendored at build time via: pip install -r requirements.txt -t vendor
 pg8000==1.31.2
+# pg8000 1.31.2 calls scramp.make_channel_binding, which scramp 1.5 removed.
+scramp>=1.4.5,<1.5

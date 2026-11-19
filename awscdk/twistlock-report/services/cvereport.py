@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 
@@ -16,7 +17,8 @@ class cveReportService:
 
     A scheduled Lambda (in the VPC, so it can reach the RDS instance) looks up the
     latest release tag for each configured repo, lists its CVEs from the
-    vulnerability database, and publishes to an SNS topic for each repo.
+    vulnerability database, and publishes to an SNS topic. Repos with identical
+    recipient lists share a single topic.
 
     Recipients and settings come from ``config/cve_report.json``::
 
@@ -47,20 +49,26 @@ class cveReportService:
         with open(os.path.join(os.path.dirname(__file__), "..", "config", "cve_report.json")) as fp:
             report_config = json.load(fp)
         schedule = report_config.get("schedule", "cron(0 14 ? * MON-FRI *)")
+        # Repos with the same recipient set share one topic, so each recipient
+        # confirms a single subscription instead of one per repo.
         topics = {}
+        repo_topics = {}
         for image_name, recipients in report_config.get("repos", {}).items():
-            recipients = list(dict.fromkeys(email.strip() for email in recipients if email and email.strip()))
+            recipients = tuple(sorted({email.strip().lower() for email in recipients if email and email.strip()}))
             if not recipients:
                 continue
-            topic = sns.Topic(self, f"{prefix}-{service}-{image_name}-topic")
-            for email in recipients:
-                topic.add_subscription(subs.EmailSubscription(email))
-            topics[image_name] = topic
+            if recipients not in topics:
+                key = hashlib.sha256(",".join(recipients).encode()).hexdigest()[:8]
+                topic = sns.Topic(self, f"{prefix}-{service}-recipients-{key}-topic")
+                for email in recipients:
+                    topic.add_subscription(subs.EmailSubscription(email))
+                topics[recipients] = topic
+            repo_topics[image_name] = topics[recipients]
 
         runtime_config = {
             "subject_prefix": report_config.get("subject_prefix", "[CVE Report]"),
             "registry": report_config.get("registry", ""),
-            "repos": {image_name: topic.topic_arn for image_name, topic in topics.items()},
+            "repos": {image_name: topic.topic_arn for image_name, topic in repo_topics.items()},
         }
 
         # Lambda egress to the RDS instance (same VPC path the app uses).

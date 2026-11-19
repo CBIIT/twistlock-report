@@ -16,7 +16,7 @@ from services import cvereport
 
 
 class CveReportStackTest(unittest.TestCase):
-    def test_synthesizes_per_repository_topics_and_scoped_permissions(self):
+    def test_synthesizes_topics_per_recipient_set_and_scoped_permissions(self):
         app = cdk.App()
         stack = cdk.Stack(app, "ReportTest")
         stack.namingPrefix = "test"
@@ -30,6 +30,7 @@ class CveReportStackTest(unittest.TestCase):
             "repos": {
                 "repo-one": ["one@example.com", "one@example.com"],
                 "repo-two": ["two@example.com"],
+                "repo-three": [" One@example.com"],
                 "repo-empty": [],
             }
         }
@@ -51,6 +52,7 @@ class CveReportStackTest(unittest.TestCase):
         self.assertEqual(runtime_config["repos"], {
             "repo-one": subscription_topics["one@example.com"],
             "repo-two": subscription_topics["two@example.com"],
+            "repo-three": subscription_topics["one@example.com"],
         })
 
         statements = [statement for resource in resources.values() if resource["Type"] == "AWS::IAM::Policy"
